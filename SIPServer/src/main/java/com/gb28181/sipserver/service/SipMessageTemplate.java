@@ -25,7 +25,7 @@ public class SipMessageTemplate {
      */
     private static final String TEMPLATE_401_UNAUTHORIZED = 
             "SIP/2.0 401 Unauthorized" + CRLF +
-            "CSeq: 1 REGISTER" + CRLF +
+            "CSeq: {CSeq}" + CRLF +
             "Call-ID: {Call-ID}" + CRLF +
             "From: {From}" + CRLF +
             "To: {To}" + CRLF +
@@ -71,11 +71,11 @@ public class SipMessageTemplate {
             "CSeq: 1 INVITE" + CRLF +
             "From: <sip:{serverId}@{serverIp}:{serverPort}>;tag=live" + CRLF +
             "To: \"{deviceId}\" <sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort}>" + CRLF +
-            "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch=branchlive" + CRLF +
+            "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
             "Max-Forwards: 70" + CRLF +
             "Content-Type: Application/sdp" + CRLF +
             "Contact: <sip:{serverId}@{serverIp}:{serverPort}>" + CRLF +
-            "Supported: 100re1" + CRLF +
+            "Supported: 100rel" + CRLF +
             "Subject: {deviceId}:010000{ssrc},{serverId}:0" + CRLF +
             "User-Agent: GB28181-SIP-Server" + CRLF +
             "Content-Length: {Content-Length}" + CRLF +
@@ -92,6 +92,8 @@ public class SipMessageTemplate {
             "t=0 0" + CRLF +
             "m=video {mediaServerPort} TCP/RTP/AVP 96 98 97" + CRLF +
             "a=recvonly" + CRLF +
+            "a=setup:passive" + CRLF +
+            "a=connection:new" + CRLF +
             "a=rtpmap:96 PS/90000" + CRLF +
             "a=rtpmap:98 H264/90000" + CRLF +
             "a=rtpmap:97 MPEG4/90000" + CRLF +
@@ -138,7 +140,7 @@ public class SipMessageTemplate {
             "CSeq: 6 BYE" + CRLF +
             "From: {From}" + CRLF +
             "To: {To}" + CRLF +
-            "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch=branchbye" + CRLF +
+            "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
             "Contact: <sip:{serverId}@{serverIp}:{serverPort}>" + CRLF +
             "Max-Forwards: 70" + CRLF +
             "Content-Length: 0" + CRLF +
@@ -147,9 +149,10 @@ public class SipMessageTemplate {
     /**
      * 生成401未授权响应
      */
-    public String build401Unauthorized(String callId, String from, String to, String via, 
+    public String build401Unauthorized(String cseq, String callId, String from, String to, String via, 
                                      String realm, String nonce) {
         return TEMPLATE_401_UNAUTHORIZED
+                .replace("{CSeq}", cseq)
                 .replace("{Call-ID}", callId)
                 .replace("{From}", from)
                 .replace("{To}", to)
@@ -208,7 +211,8 @@ public class SipMessageTemplate {
                 .replace("{serverIp}", serverIp)
                 .replace("{serverPort}", serverPort)
                 .replace("{ssrc}", ssrc)
-                .replace("{Content-Length}", String.valueOf(sdpContent.getBytes().length));
+                .replace("{branchId}", SipUtils.getBranchId())
+                .replace("{Content-Length}", String.valueOf(sdpContent.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));
 
         return inviteMessage + sdpContent;
     }
@@ -245,6 +249,7 @@ public class SipMessageTemplate {
                 .replace("{To}", to)
                 .replace("{serverId}", serverId)
                 .replace("{serverIp}", serverIp)
-                .replace("{serverPort}", serverPort);
+                .replace("{serverPort}", serverPort)
+                .replace("{branchId}", SipUtils.getBranchId());
     }
 }

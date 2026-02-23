@@ -7,7 +7,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.List;
@@ -27,7 +33,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/devices")
-@CrossOrigin(origins = "*")
 public class DeviceController {
 
     private static final Logger logger = LoggerFactory.getLogger(DeviceController.class);
@@ -42,7 +47,7 @@ public class DeviceController {
      */
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAllDevices() {
-        logger.info("获取所有设备列表");
+        logger.debug("获取所有设备列表");
 
         Map<String, Object> response = new HashMap<>();
         
@@ -71,7 +76,7 @@ public class DeviceController {
      */
     @GetMapping("/online")
     public ResponseEntity<Map<String, Object>> getOnlineDevices() {
-        logger.info("获取在线设备列表");
+        logger.debug("获取在线设备列表");
 
         Map<String, Object> response = new HashMap<>();
 
@@ -103,7 +108,7 @@ public class DeviceController {
      */
     @GetMapping("/{deviceId}")
     public ResponseEntity<Map<String, Object>> getDevice(@PathVariable String deviceId) {
-        logger.info("获取设备详情: deviceId={}", deviceId);
+        logger.debug("获取设备详情: deviceId={}", deviceId);
 
         Map<String, Object> response = new HashMap<>();
         
@@ -137,23 +142,20 @@ public class DeviceController {
      */
     @GetMapping("/statistics")
     public ResponseEntity<Map<String, Object>> getDeviceStatistics() {
-        logger.info("获取设备统计信息");
+        logger.debug("获取设备统计信息");
 
         Map<String, Object> response = new HashMap<>();
 
         try {
-            List<DeviceInfo> allDevices = deviceService.getAllDevices();
-
-            long totalCount = allDevices.size();
-            long onlineCount = allDevices.stream().filter(device -> Boolean.TRUE.equals(device.getOnline())).count();
-
-            long offlineCount = totalCount - onlineCount;
+            // 使用数据库COUNT查询，避免全表加载到内存
+            DeviceService.DeviceStatistics stats = deviceService.getDeviceStatistics();
 
             Map<String, Object> statistics = new HashMap<>();
-            statistics.put("totalDevices", totalCount);
-            statistics.put("onlineDevices", onlineCount);
-            statistics.put("offlineDevices", offlineCount);
-            statistics.put("onlineRate", totalCount > 0 ? (double) onlineCount / totalCount * 100 : 0);
+            statistics.put("totalDevices", stats.getTotalCount());
+            statistics.put("onlineDevices", stats.getOnlineCount());
+            statistics.put("offlineDevices", stats.getOfflineCount());
+            statistics.put("onlineRate", stats.getTotalCount() > 0 ? 
+                (double) stats.getOnlineCount() / stats.getTotalCount() * 100 : 0);
 
             response.put("success", true);
             response.put("message", "获取统计信息成功");

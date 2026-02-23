@@ -48,8 +48,8 @@ public class DeviceInfo implements Serializable {
     /**
      * 设备内网端口
      */
-    @Column(name = "local_port", length = 10)
-    private String localPort;
+    @Column(name = "local_port")
+    private Integer localPort;
 
     /**
      * 最后通信时间戳
@@ -187,11 +187,11 @@ public class DeviceInfo implements Serializable {
         this.localIp = localIp;
     }
 
-    public String getLocalPort() {
+    public Integer getLocalPort() {
         return localPort;
     }
 
-    public void setLocalPort(String localPort) {
+    public void setLocalPort(Integer localPort) {
         this.localPort = localPort;
     }
 
@@ -371,7 +371,7 @@ public class DeviceInfo implements Serializable {
                 ", ip='" + ip + '\'' +
                 ", port=" + port +
                 ", localIp='" + localIp + '\'' +
-                ", localPort='" + localPort + '\'' +
+                ", localPort=" + localPort +
                 ", online=" + online +
                 ", live=" + live +
                 ", ssrc='" + ssrc + '\'' +

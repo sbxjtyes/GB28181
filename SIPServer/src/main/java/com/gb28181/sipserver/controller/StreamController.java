@@ -6,7 +6,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,7 +29,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/stream")
-@CrossOrigin(origins = "*")
 public class StreamController {
 
     private static final Logger logger = LoggerFactory.getLogger(StreamController.class);
@@ -63,6 +67,16 @@ public class StreamController {
                 response.put("success", false);
                 response.put("message", "媒体服务器端口无效");
                 return ResponseEntity.badRequest().body(response);
+            }
+
+            // 检查设备是否已在推流
+            StreamService.StreamStatus currentStatus = streamService.getStreamStatus(request.getDeviceId());
+            if (currentStatus.isStreaming()) {
+                response.put("success", true);
+                response.put("message", "设备已在推流中");
+                response.put("alreadyStreaming", true);
+                response.put("deviceId", request.getDeviceId());
+                return ResponseEntity.ok(response);
             }
 
             // 调用推流服务
@@ -145,7 +159,7 @@ public class StreamController {
      */
     @GetMapping("/status/{deviceId}")
     public ResponseEntity<Map<String, Object>> getStreamStatus(@PathVariable String deviceId) {
-        logger.info("Get stream status: deviceId={}", deviceId);
+        logger.debug("Get stream status: deviceId={}", deviceId);
 
         Map<String, Object> response = new HashMap<>();
 

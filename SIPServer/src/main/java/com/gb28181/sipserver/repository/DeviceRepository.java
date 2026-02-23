@@ -57,7 +57,7 @@ public interface DeviceRepository extends JpaRepository<DeviceInfo, String> {
      */
     @Modifying
     @Transactional
-    @Query("DELETE FROM DeviceInfo d WHERE d.lastHeartbeatTime < :timeoutThreshold")
+    @Query("DELETE FROM DeviceInfo d WHERE d.lastHeartbeatTime < :timeoutThreshold AND d.live = false")
     int deleteTimeoutDevices(@Param("timeoutThreshold") Long timeoutThreshold);
 
     /**
@@ -99,4 +99,11 @@ public interface DeviceRepository extends JpaRepository<DeviceInfo, String> {
      */
     @Query("SELECT COUNT(d) FROM DeviceInfo d WHERE d.live = true")
     long countLiveDevices();
+
+    /**
+     * 查询僵尸推流会话（有callId但未进入推流状态的设备）
+     * 
+     * @return 僵尸会话设备列表
+     */
+    List<DeviceInfo> findByLiveCallIDIsNotNullAndLive(Boolean live);
 }

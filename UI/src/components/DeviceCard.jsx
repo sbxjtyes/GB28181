@@ -33,10 +33,18 @@ function DeviceCard({ device, onReregister, onStartStream, onStopStream }) {
       <div className="device-header">
         <span className={`status-dot ${device.online ? 'online' : 'offline'}`}></span>
         <span className="device-status">{device.online ? '在线' : '离线'}</span>
+        {device.live && <span className="live-badge">🔴 推流中</span>}
       </div>
       
       <div className="device-id" title={device.deviceId}>
         {device.deviceId}
+      </div>
+
+      <div className="device-details">
+        {device.ip && <span className="detail" title="设备IP">🌐 {device.ip}:{device.port}</span>}
+        {device.lastHeartbeatTime && (
+          <span className="detail" title="最后心跳">📶 {new Date(device.lastHeartbeatTime).toLocaleTimeString()}</span>
+        )}
       </div>
       
       <div className="device-actions">
@@ -51,15 +59,15 @@ function DeviceCard({ device, onReregister, onStartStream, onStopStream }) {
         <button 
           className="btn btn-play"
           onClick={() => handleAction('play', onStartStream)}
-          disabled={loading !== null || !device.online}
+          disabled={loading !== null || !device.online || device.live}
         >
-          {loading === 'play' ? '...' : '▶️ 推流'}
+          {loading === 'play' ? '...' : (device.live ? '推流中' : '▶️ 推流')}
         </button>
         
         <button 
           className="btn btn-stop"
           onClick={() => handleAction('stop', onStopStream)}
-          disabled={loading !== null}
+          disabled={loading !== null || (!device.live && !device.liveCallID)}
         >
           {loading === 'stop' ? '...' : '⏹️ 停止'}
         </button>

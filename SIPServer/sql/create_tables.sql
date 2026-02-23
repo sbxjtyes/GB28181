@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS device_info (
     ip VARCHAR(45) COMMENT '设备外网IP地址',
     port INT COMMENT '设备外网端口',
     local_ip VARCHAR(45) COMMENT '设备内网IP地址',
-    local_port VARCHAR(10) COMMENT '设备内网端口',
+    local_port INT COMMENT '设备内网端口',
     time BIGINT COMMENT '最后通信时间戳',
     online BIT DEFAULT 0 COMMENT '设备是否在线',
     live BIT DEFAULT 0 COMMENT '设备是否正在推流',

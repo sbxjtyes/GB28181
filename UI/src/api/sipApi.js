@@ -11,10 +11,10 @@ const getConfig = () => {
   }
   return {
     baseUrl: 'http://localhost:8080/gb28181',
-    mediaServerIp: '106.54.55.203',
+    mediaServerIp: '127.0.0.1',
     mediaServerPort: 30000,
     zlmBaseUrl: 'http://localhost:88',
-    zlmSecret: 'FpvUDVyWlqohv98EEE5Of3UcFhc18Ipt'
+    zlmSecret: ''
   };
 };
 
@@ -85,24 +85,6 @@ export const batchForceReregister = (deviceIds) =>
   });
 
 /**
- * 开始推流
- * @param {string} deviceId - 设备ID
- * @returns {Promise<Object>} 操作结果
- */
-export const startStream = (deviceId) => {
-  const config = getConfig();
-  return request('/api/stream/start', {
-    method: 'POST',
-    body: JSON.stringify({
-      deviceId,
-      mediaServerIp: config.mediaServerIp,
-      mediaServerPort: config.mediaServerPort,
-      useTcp: false
-    })
-  });
-};
-
-/**
  * 使用自定义配置开始推流
  * @param {string} deviceId - 设备ID
  * @param {Object} streamConfig - 推流配置
@@ -133,18 +115,6 @@ export const stopStream = (deviceId) =>
     method: 'POST',
     body: JSON.stringify({ deviceId })
   });
-
-/**
- * 批量开始推流
- * @param {string[]} deviceIds - 设备ID列表
- * @returns {Promise<Object[]>} 操作结果列表
- */
-export const batchStartStream = async (deviceIds) => {
-  const results = await Promise.all(
-    deviceIds.map(deviceId => startStream(deviceId))
-  );
-  return results;
-};
 
 /**
  * 测试服务器连接

@@ -11,7 +11,7 @@ import './StreamCard.css';
  * @param {Function} props.onCopyUrl - 复制地址回调
  */
 function StreamCard({ stream, playUrls, onClose, onCopyUrl }) {
-  const { app, stream: streamName, schema, vhost, originType, readerCount, totalReaderCount } = stream;
+  const { app, stream: streamName, schema, vhost, originType, totalReaderCount } = stream;
 
   const fallbackCopyText = (text) => {
     const textArea = document.createElement('textarea');
@@ -129,9 +129,10 @@ function StreamCard({ stream, playUrls, onClose, onCopyUrl }) {
       <div className="stream-actions">
         <button 
           className="action-btn play-btn"
-          onClick={() => window.open(playUrls.flv, '_blank')}
+          onClick={() => handleCopy(playUrls.flv, 'HTTP-FLV')}
+          title="复制HTTP-FLV播放地址，可用VLC或浏览器插件播放"
         >
-          ▶️ 播放
+          📋 复制播放地址
         </button>
         <button 
           className="action-btn close-btn"

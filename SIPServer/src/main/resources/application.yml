@@ -31,7 +31,7 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:31306/gb28181_sip_server?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&autoReconnect=true&failOverReadOnly=false}
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:Yf.31306}
+    password: ${SPRING_DATASOURCE_PASSWORD:changeme}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   # JPA配置
@@ -71,13 +71,15 @@ gb28181:
     server-ip: ${GB28181_SERVER_IP:0.0.0.0}
     # SIP服务器监听端口
     server-port: ${GB28181_SERVER_PORT:5060}
+    # SIP消息中使用的IP地址（留空则自动检测，多网卡环境建议显式配置）
+    sip-ip: ${GB28181_SIP_IP:}
 
     # 设备信息存储的数据库表前缀（已改为MySQL存储）
     sip-device-key: ${GB28181_SIP_DEVICE_KEY:gb28181_sip_device_key}
     # SIP域
     sip-domain: ${GB28181_SIP_DOMAIN:3402000000}
-    # 设备认证密码
-    device-password: ${GB28181_DEVICE_PASSWORD:Yf.31306}
+    # 设备认证密码（请通过环境变量 GB28181_DEVICE_PASSWORD 设置）
+    device-password: ${GB28181_DEVICE_PASSWORD:changeme}
     # 心跳超时时间（秒）
     heartbeat-timeout: ${GB28181_HEARTBEAT_TIMEOUT:60}
     # 设备注册有效期（秒）

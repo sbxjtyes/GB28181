@@ -47,7 +47,7 @@ public class DeviceService {
         try {
             deviceInfo.setDeviceId(deviceId);
             deviceRepository.save(deviceInfo);
-            logger.info("保存设备信息成功: {}", deviceId);
+            logger.debug("保存设备信息成功: {}", deviceId);
         } catch (Exception e) {
             logger.error("保存设备信息失败: {}, 错误: {}", deviceId, e.getMessage(), e);
         }
@@ -123,7 +123,7 @@ public class DeviceService {
         if (deviceInfo != null) {
             deviceInfo.updateHeartbeat();
             saveDeviceInfo(deviceId, deviceInfo);
-            logger.info("更新设备心跳: {}", deviceId);
+            logger.debug("更新设备心跳: {}", deviceId);
         }
     }
 
@@ -319,8 +319,50 @@ public class DeviceService {
     }
 
     /**
+     * 定时清理僵尸推流会话
+     * 每30秒执行一次，清理发送了INVITE但超过30秒未收到200 OK的会话
+     */
+    @Scheduled(fixedRate = 30000) // 30秒
+    public void cleanupStaleSessions() {
+        try {
+            // 仅查询有callId但live=false的设备，避免全表加载
+            List<DeviceInfo> staleDevices = deviceRepository.findByLiveCallIDIsNotNullAndLive(false);
+            long now = System.currentTimeMillis();
+            int cleaned = 0;
+            
+            for (DeviceInfo device : staleDevices) {
+                // 尝试从CallID中提取时间戳
+                try {
+                    String callId = device.getLiveCallID();
+                    int underscoreIdx = callId.lastIndexOf('_');
+                    if (underscoreIdx > 0) {
+                        long timestamp = Long.parseLong(callId.substring(underscoreIdx + 1));
+                        if (now - timestamp > 30000) { // 超过30秒
+                            clearDeviceLiveInfo(device.getDeviceId());
+                            cleaned++;
+                            logger.info("清理僵尸推流会话: 设备ID={}, callId={}", 
+                                device.getDeviceId(), callId);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    // CallID格式不包含时间戳，直接清理
+                    clearDeviceLiveInfo(device.getDeviceId());
+                    cleaned++;
+                }
+            }
+            
+            if (cleaned > 0) {
+                logger.info("本次清理僵尸推流会话数量: {}", cleaned);
+            }
+        } catch (Exception e) {
+            logger.error("清理僵尸推流会话失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
      * 定时清理超时设备
      * 每5分钟执行一次
+     * 先设置超时设备为离线，再删除长时间超时的设备（避免数据竞争）
      */
     @Scheduled(fixedRate = 300000) // 5分钟
     public void cleanupTimeoutDevices() {
@@ -329,20 +371,22 @@ public class DeviceService {
             long timeoutThreshold = currentTime - (sipServerConfig.getHeartbeatTimeout() * 1000L);
             long cleanupThreshold = currentTime - (sipServerConfig.getHeartbeatTimeout() * 3 * 1000L);
 
-            // 删除超时设备
-            int cleanupCount = deviceRepository.deleteTimeoutDevices(cleanupThreshold);
-
-            // 设置超时设备为离线状态
+            // 先设置超时设备为离线状态（超过心跳超时但未达到清理阈值）
             List<DeviceInfo> timeoutDevices = deviceRepository.findTimeoutDevices(timeoutThreshold);
+            int offlineCount = 0;
             for (DeviceInfo device : timeoutDevices) {
-                if (device.getLastHeartbeatTime() >= cleanupThreshold) { // 未达到清理阈值
+                if (device.getLastHeartbeatTime() != null && device.getLastHeartbeatTime() >= cleanupThreshold) {
                     deviceRepository.updateOnlineStatus(device.getDeviceId(), false);
+                    offlineCount++;
                     logger.info("设备超时，设置为离线: {}", device.getDeviceId());
                 }
             }
 
-            if (cleanupCount > 0) {
-                logger.info("本次清理超时设备数量: {}", cleanupCount);
+            // 再删除长时间超时的设备
+            int cleanupCount = deviceRepository.deleteTimeoutDevices(cleanupThreshold);
+
+            if (offlineCount > 0 || cleanupCount > 0) {
+                logger.info("设备清理完成: 设置离线 {}  个，删除 {} 个", offlineCount, cleanupCount);
             }
         } catch (Exception e) {
             logger.error("清理超时设备失败: {}", e.getMessage(), e);

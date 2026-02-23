@@ -65,22 +65,22 @@ public class StreamService {
             }
 
             if (Boolean.TRUE.equals(deviceInfo.getLive())) {
-                logger.warn("设备已在推流中: {}", deviceId);
-                return true;
+                logger.info("设备已在推流中，跳过: {}", deviceId);
+                return false; // 返回false让调用方知道未发起新推流
             }
 
             // 生成推流会话信息
             String callId = generateCallId(deviceId);
             String ssrc = generateSsrc(deviceId);
 
-            // 构建INVITE推流请求
+            // 构建INVITE推流请求（使用sipIp而非监听IP，避免0.0.0.0出现在SIP头部）
             String inviteMessage = sipMessageTemplate.buildInviteRequest(
                     deviceId,
                     deviceInfo.getLocalIp() != null ? deviceInfo.getLocalIp() : deviceInfo.getIp(),
-                    deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : String.valueOf(deviceInfo.getPort()),
+                    String.valueOf(deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort()),
                     callId,
                     sipServerConfig.getServerId(),
-                    sipServerConfig.getServerIp(),
+                    sipServerConfig.getSipIp(),
                     String.valueOf(sipServerConfig.getServerPort()),
                     ssrc,
                     mediaServerIp,
@@ -118,7 +118,6 @@ public class StreamService {
      * @return 停止推流结果
      */
     public boolean stopStream(String deviceId) {
-        logger.info("===== 停止推流请求开始 =====");
         logger.info("停止推流请求: 设备ID={}", deviceId);
 
         try {
@@ -130,7 +129,7 @@ public class StreamService {
             }
 
             // 检查设备状态和会话信息
-            logger.info("设备状态: live={}, callId={}, from={}, to={}", 
+            logger.debug("设备状态: live={}, callId={}, from={}, to={}", 
                        deviceInfo.getLive(), 
                        deviceInfo.getLiveCallID(),
                        deviceInfo.getLiveFromInfo(),
@@ -149,31 +148,32 @@ public class StreamService {
             
             if (fromInfo == null || fromInfo.isEmpty()) {
                 fromInfo = "<sip:" + sipServerConfig.getServerId() + "@" + 
-                          sipServerConfig.getServerIp() + ":" + sipServerConfig.getServerPort() + ">;tag=live";
+                          sipServerConfig.getSipIp() + ":" + sipServerConfig.getServerPort() + ">;tag=live";
                 logger.warn("缺少From信息，使用默认值: {}", fromInfo);
             }
             
             if (toInfo == null || toInfo.isEmpty()) {
                 String deviceLocalIp = deviceInfo.getLocalIp() != null ? deviceInfo.getLocalIp() : deviceInfo.getIp();
-                String deviceLocalPort = deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : String.valueOf(deviceInfo.getPort());
-                toInfo = "\"" + deviceId + "\" <sip:" + deviceId + "@" + deviceLocalIp + ":" + deviceLocalPort + ">";
+                String deviceLocalPort = String.valueOf(deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort());
+                // fallback To 加 tag 参数，部分设备要求 BYE 的 To 必须包含 tag 才能匹配对话
+                toInfo = "\"" + deviceId + "\" <sip:" + deviceId + "@" + deviceLocalIp + ":" + deviceLocalPort + ">;tag=live";
                 logger.warn("缺少To信息，使用默认值: {}", toInfo);
             }
 
-            // 构建BYE断流请求
+            // 构建BYE断流请求（使用sipIp而非监听IP）
             String byeMessage = sipMessageTemplate.buildByeRequest(
                     deviceId,
                     deviceInfo.getLocalIp() != null ? deviceInfo.getLocalIp() : deviceInfo.getIp(),
-                    deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : String.valueOf(deviceInfo.getPort()),
+                    String.valueOf(deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort()),
                     callId,
                     fromInfo,
                     toInfo,
                     sipServerConfig.getServerId(),
-                    sipServerConfig.getServerIp(),
+                    sipServerConfig.getSipIp(),
                     String.valueOf(sipServerConfig.getServerPort())
             );
 
-            logger.info("BYE消息内容:\n{}", byeMessage);
+            logger.debug("BYE消息内容:\n{}", byeMessage);
 
             // 发送BYE请求
             boolean sent = sipUdpServer.sendMessage(byeMessage, deviceInfo.getIp(), deviceInfo.getPort());
@@ -182,11 +182,9 @@ public class StreamService {
                 // 立即清除推流状态（不等待BYE响应）
                 deviceService.clearDeviceLiveInfo(deviceId);
                 logger.info("✓ 停止推流请求发送成功: 设备ID={}", deviceId);
-                logger.info("===== 停止推流请求结束（成功）=====");
                 return true;
             } else {
                 logger.error("✗ 停止推流请求发送失败: 设备ID={}", deviceId);
-                logger.info("===== 停止推流请求结束（失败）=====");
                 return false;
             }
 
@@ -224,20 +222,17 @@ public class StreamService {
     }
 
     /**
-     * 生成SSRC
+     * 生成SSRC（使用设备ID + 随机数确保唯一性）
      */
     private String generateSsrc(String deviceId) {
         if (StringUtils.isBlank(deviceId)) {
-            return "01000000";
+            return "0100" + String.format("%04d", (int)(Math.random() * 10000));
         }
 
-        String numericPart = deviceId.replaceAll("\\D", "");
-        if (numericPart.length() < 4) {
-            numericPart = StringUtils.leftPad(numericPart, 4, '0');
-        } else {
-            numericPart = numericPart.substring(numericPart.length() - 4);
-        }
-        return "0100" + numericPart;
+        // 使用设备ID的hashCode + 当前时间戳生成4位数字，避免冲突
+        // 用位运算替代 Math.abs，避免 Integer.MIN_VALUE 返回负数
+        int hash = ((deviceId + System.nanoTime()).hashCode() & 0x7FFFFFFF) % 10000;
+        return "0100" + String.format("%04d", hash);
     }
 
     /**

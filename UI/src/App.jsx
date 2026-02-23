@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Toolbar from './components/Toolbar';
 import DeviceCard from './components/DeviceCard';
 import SettingsPanel from './components/SettingsPanel';
@@ -25,42 +25,57 @@ function App() {
   const [streamConfigOpen, setStreamConfigOpen] = useState(false); // 推流配置对话框
   const [selectedDevice, setSelectedDevice] = useState(null); // 选中的设备
 
+  // 消息定时器引用，防止多次调用时旧 timer 提前清除新消息
+  const messageTimerRef = useRef(null);
+
   /**
    * 显示提示消息
    * @param {string} text - 消息内容
    * @param {string} type - 消息类型 (success/error/info)
    */
   const showMessage = useCallback((text, type = 'info') => {
+    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
     setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
+    messageTimerRef.current = setTimeout(() => setMessage(null), 3000);
   }, []);
 
   /**
    * 刷新设备列表
+   * @param {boolean} silent - 是否静默刷新（不弹toast）
    */
-  const refreshDevices = useCallback(async () => {
-    setLoading(true);
+  const refreshDevices = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const result = await api.getDevices();
       if (result.success) {
         setDevices(result.devices || []);
         setConnected(true);
-        showMessage(`获取到 ${result.devices?.length || 0} 个设备`, 'success');
+        if (!silent) {
+          showMessage(`获取到 ${result.devices?.length || 0} 个设备`, 'success');
+        }
       } else {
         setConnected(false);
-        showMessage('获取设备列表失败: ' + (result.message || '未知错误'), 'error');
+        if (!silent) {
+          showMessage('获取设备列表失败: ' + (result.message || '未知错误'), 'error');
+        }
       }
     } catch (err) {
       setConnected(false);
-      showMessage('连接服务器失败', 'error');
+      if (!silent) {
+        showMessage('连接服务器失败', 'error');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [showMessage]);
 
-  // 初始加载
+  // 初始加载 + 自动刷新（10秒轮询，静默模式）
   useEffect(() => {
     refreshDevices();
+    const interval = setInterval(() => {
+      refreshDevices(true);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [refreshDevices]);
 
   /**
@@ -68,11 +83,15 @@ function App() {
    * @param {string} deviceId - 设备ID
    */
   const handleReregister = async (deviceId) => {
-    const result = await api.forceReregister(deviceId);
-    if (result.success) {
-      showMessage(`${deviceId} 注册请求已发送`, 'success');
-    } else {
-      showMessage(`注册失败: ${result.message}`, 'error');
+    try {
+      const result = await api.forceReregister(deviceId);
+      if (result.success) {
+        showMessage(`${deviceId} 注册请求已发送`, 'success');
+      } else {
+        showMessage(`注册失败: ${result.message}`, 'error');
+      }
+    } catch (err) {
+      showMessage(`注册请求异常: ${err.message}`, 'error');
     }
   };
 
@@ -94,36 +113,52 @@ function App() {
    * @param {Object} config - 推流配置
    */
   const handleConfirmStream = async (config) => {
-    const { deviceId, port, streamId, useTcp } = config;
+    const { deviceId, port, useTcp } = config;
+    // 使用确定性streamId，便于停流时关闭对应RTP端口
+    const rtpStreamId = `rtp_${deviceId}`;
     
-    // 步骤1：先在ZKServer开启RTP收流端口
-    showMessage(`正在开启RTP端口 ${port}...`, 'info');
-    const rtpResult = await zlmApi.openRtpServer(port, streamId, useTcp ? 1 : 0);
-    
-    if (!rtpResult.success) {
-      showMessage(`开启RTP端口失败: ${rtpResult.message}`, 'error');
-      return;
-    }
-    
-    const actualPort = rtpResult.data?.port || port;
-    showMessage(`RTP端口 ${actualPort} 已开启，正在发送INVITE...`, 'info');
-    
-    // 步骤2：调用SIP服务器发送INVITE请求
-    const serverSettings = api.getSettings();
-    const result = await api.startStreamWithConfig(deviceId, {
-      mediaServerIp: serverSettings.mediaServerIp,
-      mediaServerPort: actualPort,
-      useTcp
-    });
-    
-    if (result.success) {
-      showMessage(`${deviceId} 推流启动成功`, 'success');
-      setStreamConfigOpen(false);
-      setSelectedDevice(null);
-    } else {
-      // 推流失败时关闭RTP端口
-      await zlmApi.closeRtpServer(streamId);
-      showMessage(`推流失败: ${result.message}`, 'error');
+    try {
+      // 步骤1：先在ZKServer开启RTP收流端口
+      const portLabel = port === 0 ? '自动分配' : port;
+      showMessage(`正在开启RTP端口 ${portLabel}...`, 'info');
+      const rtpResult = await zlmApi.openRtpServer(port, rtpStreamId, useTcp ? 1 : 0);
+      
+      if (!rtpResult.success) {
+        showMessage(`开启RTP端口失败: ${rtpResult.message}`, 'error');
+        return;
+      }
+      
+      const actualPort = rtpResult.data?.port || port;
+      showMessage(`RTP端口 ${actualPort} 已开启，正在发送INVITE...`, 'info');
+      
+      // 步骤2：调用SIP服务器发送INVITE请求
+      const serverSettings = api.getSettings();
+      const result = await api.startStreamWithConfig(deviceId, {
+        mediaServerIp: serverSettings.mediaServerIp,
+        mediaServerPort: actualPort,
+        useTcp
+      });
+      
+      if (result.success) {
+        if (result.alreadyStreaming) {
+          // 设备已在推流，关闭多余的RTP端口
+          await zlmApi.closeRtpServer(rtpStreamId);
+          showMessage(`${deviceId} 已在推流中`, 'info');
+        } else {
+          showMessage(`${deviceId} 推流启动成功`, 'success');
+        }
+        setStreamConfigOpen(false);
+        setSelectedDevice(null);
+        refreshDevices(true);
+      } else {
+        // 推流失败时关闭RTP端口
+        await zlmApi.closeRtpServer(rtpStreamId);
+        showMessage(`推流失败: ${result.message}`, 'error');
+      }
+    } catch (err) {
+      // 异常时也需要关闭已开启的RTP端口，避免泄漏
+      await zlmApi.closeRtpServer(rtpStreamId).catch(() => {});
+      showMessage(`推流异常: ${err.message}`, 'error');
     }
   };
 
@@ -132,11 +167,19 @@ function App() {
    * @param {string} deviceId - 设备ID
    */
   const handleStopStream = async (deviceId) => {
-    const result = await api.stopStream(deviceId);
-    if (result.success) {
-      showMessage(`${deviceId} 推流已停止`, 'success');
-    } else {
-      showMessage(`停止失败: ${result.message}`, 'error');
+    try {
+      const result = await api.stopStream(deviceId);
+      if (result.success) {
+        // 同时关闭ZLM上对应的RTP收流端口，避免资源泄漏
+        const rtpStreamId = `rtp_${deviceId}`;
+        await zlmApi.closeRtpServer(rtpStreamId).catch(() => {});
+        showMessage(`${deviceId} 推流已停止`, 'success');
+        refreshDevices(true);
+      } else {
+        showMessage(`停止失败: ${result.message}`, 'error');
+      }
+    } catch (err) {
+      showMessage(`停止推流异常: ${err.message}`, 'error');
     }
   };
 
@@ -159,6 +202,8 @@ function App() {
       } else {
         showMessage(`批量注册失败: ${result.message}`, 'error');
       }
+    } catch (err) {
+      showMessage(`批量注册异常: ${err.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -166,20 +211,60 @@ function App() {
 
   /**
    * 批量推流所有在线设备
+   * 复用完整推流流程：开启RTP端口 → 发送INVITE
    */
   const handleBatchStream = async () => {
-    const onlineDevices = devices.filter(d => d.online);
+    const onlineDevices = devices.filter(d => d.online && !d.live);
     if (onlineDevices.length === 0) {
-      showMessage('没有在线设备可以推流', 'info');
+      showMessage('没有可推流的在线设备', 'info');
       return;
     }
     
-    const deviceIds = onlineDevices.map(d => d.deviceId);
     setLoading(true);
+    let successCount = 0;
+    const serverSettings = api.getSettings();
+    
     try {
-      const results = await api.batchStartStream(deviceIds);
-      const successCount = results.filter(r => r.success).length;
-      showMessage(`批量推流完成: ${successCount}/${deviceIds.length} 成功`, 'success');
+      for (const device of onlineDevices) {
+        // 声明在try外部，确保catch块可访问
+        const rtpStreamId = `rtp_${device.deviceId}`;
+        try {
+          // 步骤1：开启RTP端口（port=0 让ZLM自动分配，避免端口冲突）
+          const rtpResult = await zlmApi.openRtpServer(0, rtpStreamId, 0);
+          if (!rtpResult.success) {
+            console.warn(`设备 ${device.deviceId} 开启RTP端口失败:`, rtpResult.message);
+            continue;
+          }
+          const actualPort = rtpResult.data?.port;
+          if (!actualPort) {
+            console.warn(`设备 ${device.deviceId} 未返回有效端口`);
+            await zlmApi.closeRtpServer(rtpStreamId);
+            continue;
+          }
+          
+          // 步骤2：发送INVITE
+          const result = await api.startStreamWithConfig(device.deviceId, {
+            mediaServerIp: serverSettings.mediaServerIp,
+            mediaServerPort: actualPort,
+            useTcp: false
+          });
+          
+          if (result.success) {
+            if (result.alreadyStreaming) {
+              // 设备已在推流，关闭多余的RTP端口
+              await zlmApi.closeRtpServer(rtpStreamId);
+            }
+            successCount++;
+          } else {
+            await zlmApi.closeRtpServer(rtpStreamId);
+          }
+        } catch (err) {
+          // 异常时关闭已开启的RTP端口，避免泄漏
+          await zlmApi.closeRtpServer(rtpStreamId).catch(() => {});
+          console.warn(`设备 ${device.deviceId} 推流失败:`, err);
+        }
+      }
+      showMessage(`批量推流完成: ${successCount}/${onlineDevices.length} 成功`, 'success');
     } finally {
       setLoading(false);
     }

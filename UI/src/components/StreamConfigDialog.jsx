@@ -14,7 +14,7 @@ import './StreamConfigDialog.css';
 function StreamConfigDialog({ isOpen, device, onConfirm, onCancel }) {
   // 配置状态
   const [port, setPort] = useState(30000);
-  const [streamId, setStreamId] = useState('');
+  const [autoPort, setAutoPort] = useState(true);
   const [useTcp, setUseTcp] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +24,7 @@ function StreamConfigDialog({ isOpen, device, onConfirm, onCancel }) {
   useEffect(() => {
     if (isOpen && device) {
       setPort(30000);
-      setStreamId(`stream_${Date.now()}`);
+      setAutoPort(true);
       setUseTcp(false);
       setLoading(false);
     }
@@ -38,8 +38,7 @@ function StreamConfigDialog({ isOpen, device, onConfirm, onCancel }) {
     try {
       await onConfirm({
         deviceId: device.deviceId,
-        port: parseInt(port) || 30000,
-        streamId: streamId || `stream_${Date.now()}`,
+        port: autoPort ? 0 : (parseInt(port) || 30000),
         useTcp
       });
     } finally {
@@ -72,32 +71,44 @@ function StreamConfigDialog({ isOpen, device, onConfirm, onCancel }) {
             <span className="value">{device.deviceId}</span>
           </div>
 
-          <div className="config-item">
-            <label htmlFor="port">RTP端口</label>
-            <input
-              id="port"
-              type="number"
-              value={port}
-              onChange={e => setPort(e.target.value)}
-              placeholder="30000"
-              min="1024"
-              max="65535"
-              disabled={loading}
-            />
-            <span className="hint">接收RTP流的端口 (1024-65535)</span>
+          <div className="config-item checkbox-item">
+            <label>
+              <input
+                type="checkbox"
+                checked={autoPort}
+                onChange={e => setAutoPort(e.target.checked)}
+                disabled={loading}
+              />
+              自动分配端口
+            </label>
+            <span className="hint">由ZLMediaKit自动分配可用端口，避免冲突</span>
           </div>
 
+          {!autoPort && (
+            <div className="config-item">
+              <label htmlFor="port">RTP端口</label>
+              <input
+                id="port"
+                type="number"
+                value={port}
+                onChange={e => setPort(e.target.value)}
+                placeholder="30000"
+                min="1024"
+                max="65535"
+                disabled={loading}
+              />
+              <span className="hint">接收RTP流的端口 (1024-65535)</span>
+            </div>
+          )}
+
           <div className="config-item">
-            <label htmlFor="streamId">流ID</label>
+            <label>流ID</label>
             <input
-              id="streamId"
               type="text"
-              value={streamId}
-              onChange={e => setStreamId(e.target.value)}
-              placeholder="自动生成"
-              disabled={loading}
+              value={`rtp_${device.deviceId}`}
+              disabled
             />
-            <span className="hint">用于标识流的唯一ID</span>
+            <span className="hint">自动生成，用于标识流和RTP端口</span>
           </div>
 
           <div className="config-item checkbox-item">

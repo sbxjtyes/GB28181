@@ -12,7 +12,17 @@
 }
 
 .device-card.online {
-  border-left: 3px solid #4ade80;
+  border-color: #4ade80;
+}
+
+.live-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: 600;
+  margin-left: auto;
 }
 
 .device-card.offline {
@@ -50,8 +60,23 @@
   font-family: 'Consolas', monospace;
   font-size: 13px;
   color: #e0e0e0;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   word-break: break-all;
+}
+
+.device-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 11px;
+  color: #999;
+}
+
+.device-details .detail {
+  background: #2a2a3a;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .device-actions {

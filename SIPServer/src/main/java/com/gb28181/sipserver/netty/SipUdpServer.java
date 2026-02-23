@@ -91,11 +91,11 @@ public class SipUdpServer {
     @PreDestroy
     public void stop() {
         try {
-            if (channelFuture != null) {
-                channelFuture.channel().closeFuture().sync();
+            if (channelFuture != null && channelFuture.channel().isActive()) {
+                channelFuture.channel().close().sync();
             }
             if (group != null) {
-                group.shutdownGracefully();
+                group.shutdownGracefully().sync();
             }
             logger.info("SIP UDP服务器已停止");
         } catch (Exception e) {
@@ -149,9 +149,20 @@ public class SipUdpServer {
             DatagramPacket packet = new DatagramPacket(
                     Unpooled.copiedBuffer(message, CharsetUtil.UTF_8), target);
 
-            channelFuture.channel().writeAndFlush(packet);
-            logger.info("发送SIP消息到 {}:{}\n{}", targetIp, targetPort, message.replace("\r\n", "\n"));
+            ChannelFuture writeFuture = channelFuture.channel().writeAndFlush(packet);
+            boolean completed = writeFuture.await(3000); // 等待最多3秒
+            
+            if (!completed) {
+                logger.warn("发送SIP消息超时: {}:{}", targetIp, targetPort);
+                return false;
+            }
+            if (!writeFuture.isSuccess()) {
+                logger.error("发送SIP消息失败: {}:{}, 原因: {}", targetIp, targetPort, 
+                    writeFuture.cause() != null ? writeFuture.cause().getMessage() : "未知");
+                return false;
+            }
 
+            logger.debug("发送SIP消息到 {}:{}\n{}", targetIp, targetPort, message.replace("\r\n", "\n"));
             return true;
         } catch (Exception e) {
             logger.error("发送SIP消息失败: {}", e.getMessage(), e);

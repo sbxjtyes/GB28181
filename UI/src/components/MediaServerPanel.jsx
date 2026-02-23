@@ -19,9 +19,10 @@ function MediaServerPanel({ showMessage }) {
 
   /**
    * 刷新流列表
+   * @param {boolean} silent - 是否静默刷新（不弹toast）
    */
-  const refreshStreams = useCallback(async () => {
-    setLoading(true);
+  const refreshStreams = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const result = await zlmApi.getMediaList();
       if (result.success) {
@@ -38,16 +39,22 @@ function MediaServerPanel({ showMessage }) {
         
         setStreams(uniqueStreams);
         setConnected(true);
-        showMessage(`获取到 ${uniqueStreams.length} 个流`, 'success');
+        if (!silent) {
+          showMessage(`获取到 ${uniqueStreams.length} 个流`, 'success');
+        }
       } else {
         setConnected(false);
-        showMessage('获取流列表失败: ' + result.message, 'error');
+        if (!silent) {
+          showMessage('获取流列表失败: ' + result.message, 'error');
+        }
       }
     } catch (err) {
       setConnected(false);
-      showMessage('连接媒体服务器失败', 'error');
+      if (!silent) {
+        showMessage('连接媒体服务器失败', 'error');
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [showMessage]);
 
@@ -72,15 +79,22 @@ function MediaServerPanel({ showMessage }) {
     const isConnected = await zlmApi.testConnection();
     setConnected(isConnected);
     if (isConnected) {
-      refreshStreams();
+      refreshStreams(true);
       refreshRtpServers();
     }
   }, [refreshStreams, refreshRtpServers]);
 
-  // 初始加载
+  // 初始加载 + 自动刷新
   useEffect(() => {
     testConnection();
-  }, [testConnection]);
+    const interval = setInterval(() => {
+      if (connected) {
+        refreshStreams(true);
+        refreshRtpServers();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [testConnection, connected, refreshStreams, refreshRtpServers]);
 
   /**
    * 关闭流
@@ -90,12 +104,18 @@ function MediaServerPanel({ showMessage }) {
    * @param {string} vhost - 虚拟主机名
    */
   const handleCloseStream = async (schema, app, stream, vhost) => {
-    const result = await zlmApi.closeStream(schema, app, stream, true, vhost || '__defaultVhost__');
-    if (result.success) {
-      showMessage(`流 ${app}/${stream} 已关闭`, 'success');
-      refreshStreams();
-    } else {
-      showMessage(`关闭失败: ${result.message}`, 'error');
+    try {
+      // 不传schema，关闭该流的所有协议版本
+      const result = await zlmApi.closeStream(null, app, stream, true, vhost || '__defaultVhost__');
+      if (result.success) {
+        showMessage(`流 ${app}/${stream} 已关闭`, 'success');
+        refreshStreams(true);
+        refreshRtpServers();
+      } else {
+        showMessage(`关闭失败: ${result.message}`, 'error');
+      }
+    } catch (err) {
+      showMessage(`关闭流异常: ${err.message}`, 'error');
     }
   };
 
@@ -116,12 +136,16 @@ function MediaServerPanel({ showMessage }) {
    * @param {string} streamId - 流ID
    */
   const handleCloseRtpServer = async (streamId) => {
-    const result = await zlmApi.closeRtpServer(streamId);
-    if (result.success) {
-      showMessage(`RTP服务器 ${streamId} 已关闭`, 'success');
-      refreshRtpServers();
-    } else {
-      showMessage(`关闭失败: ${result.message}`, 'error');
+    try {
+      const result = await zlmApi.closeRtpServer(streamId);
+      if (result.success) {
+        showMessage(`RTP服务器 ${streamId} 已关闭`, 'success');
+        refreshRtpServers();
+      } else {
+        showMessage(`关闭失败: ${result.message}`, 'error');
+      }
+    } catch (err) {
+      showMessage(`关闭RTP服务器异常: ${err.message}`, 'error');
     }
   };
 

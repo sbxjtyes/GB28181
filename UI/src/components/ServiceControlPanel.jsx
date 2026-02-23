@@ -27,8 +27,8 @@ function ServiceControlPanel({ showMessage }) {
   /**
    * 刷新服务状态
    */
-  const refreshStatus = useCallback(async () => {
-    setLoading(true);
+  const refreshStatus = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const result = await serviceApi.getServicesStatus();
       if (result.success) {
@@ -41,14 +41,14 @@ function ServiceControlPanel({ showMessage }) {
     } catch {
       setManagerAvailable(false);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   // 初始加载和定时刷新
   useEffect(() => {
     refreshStatus();
-    const interval = setInterval(refreshStatus, 5000);
+    const interval = setInterval(() => refreshStatus(true), 5000);
     return () => clearInterval(interval);
   }, [refreshStatus]);
 

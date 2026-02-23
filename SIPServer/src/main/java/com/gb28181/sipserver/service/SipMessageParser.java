@@ -117,11 +117,17 @@ public class SipMessageParser {
      * @param result 解析结果
      */
     private void parseHeader(String line, Map<String, String> result) {
-        if (!line.contains(": ")) {
+        if (!line.contains(":")) {
             return;
         }
         
-        String[] parts = line.split(": ", 2);
+        // 防御性检查：排除误入的SIP请求行/状态行
+        if (line.startsWith("SIP/2.0") || line.endsWith("SIP/2.0")) {
+            return;
+        }
+        
+        // 兼容 "Header: value" 和 "Header:value" 两种格式
+        String[] parts = line.split(":\\s*", 2);
         if (parts.length != 2) {
             return;
         }
@@ -307,30 +313,41 @@ public class SipMessageParser {
     }
 
     /**
-     * 解析消息体
+     * 解析消息体（支持标准XML解析）
      * 
      * @param line 消息体行
      * @param result 解析结果
      */
     private void parseMessageBody(String line, Map<String, String> result) {
-        if (line.contains("<CmdType>")) {
-            // 解析命令类型（如Keepalive）
-            String cmdType = line.trim();
-            cmdType = cmdType.replace("<CmdType>", "");
-            cmdType = cmdType.replace("</CmdType>", "");
-            result.put("CmdType", cmdType);
-        } else if (line.contains("<DeviceID>")) {
-            // 解析设备ID
-            String deviceId = line.trim();
-            deviceId = deviceId.replace("<DeviceID>", "");
-            deviceId = deviceId.replace("</DeviceID>", "");
-            result.put("bodyDeviceId", deviceId);
-        } else if (line.contains("<Status>")) {
-            // 解析状态
-            String status = line.trim();
-            status = status.replace("<Status>", "");
-            status = status.replace("</Status>", "");
-            result.put("Status", status);
+        // 用正则表达式提取XML标签内容，兼容属性、空格等场景
+        extractXmlTag(line, "CmdType", "CmdType", result);
+        extractXmlTag(line, "DeviceID", "bodyDeviceId", result);
+        extractXmlTag(line, "Status", "Status", result);
+        extractXmlTag(line, "Manufacturer", "Manufacturer", result);
+        extractXmlTag(line, "Model", "Model", result);
+        extractXmlTag(line, "Firmware", "Firmware", result);
+        extractXmlTag(line, "Result", "Result", result);
+        extractXmlTag(line, "SumNum", "SumNum", result);
+    }
+
+    /**
+     * 从XML行中提取指定标签的内容
+     * 支持带属性的标签，如 <CmdType attr="val">Keepalive</CmdType>
+     */
+    private void extractXmlTag(String line, String tagName, String resultKey, Map<String, String> result) {
+        if (!line.contains("<" + tagName)) {
+            return;
+        }
+        try {
+            // 匹配 <tagName...>content</tagName>
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "<" + tagName + "[^>]*>([^<]*)</" + tagName + ">");
+            java.util.regex.Matcher matcher = pattern.matcher(line);
+            if (matcher.find()) {
+                result.put(resultKey, matcher.group(1).trim());
+            }
+        } catch (Exception e) {
+            logger.warn("解析XML标签 {} 失败: {}", tagName, line);
         }
     }
 

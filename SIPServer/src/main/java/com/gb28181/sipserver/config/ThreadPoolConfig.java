@@ -61,7 +61,7 @@ public class ThreadPoolConfig {
         ThreadPoolTaskExecutor executor = buildExecutor(
                 props,
                 "SipMessage-",
-                new ThreadPoolExecutor.DiscardOldestPolicy(),
+                new ThreadPoolExecutor.CallerRunsPolicy(),
                 30);
         logger.info("SIP消息处理线程池初始化完成: corePoolSize={}, maxPoolSize={}, queueCapacity={}",
                 executor.getCorePoolSize(), executor.getMaxPoolSize(), props.getQueueCapacity());

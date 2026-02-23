@@ -13,12 +13,12 @@ const getZLMConfig = () => {
     const config = JSON.parse(saved);
     return {
       baseUrl: config.zlmBaseUrl || 'http://localhost:88',
-      secret: config.zlmSecret || 'FpvUDVyWlqohv98EEE5Of3UcFhc18Ipt'
+      secret: config.zlmSecret || ''
     };
   }
   return {
     baseUrl: 'http://localhost:88',
-    secret: 'FpvUDVyWlqohv98EEE5Of3UcFhc18Ipt'
+    secret: ''
   };
 };
 
@@ -89,7 +89,10 @@ export const getMediaInfo = (app, stream, schema = '') => {
  * @returns {Promise<Object>} 操作结果
  */
 export const closeStream = (schema, app, stream, force = false, vhost = '__defaultVhost__') => {
-  return request('close_stream', { schema, vhost, app, stream, force: force ? 1 : 0 });
+  // 不传schema参数，让ZLM关闭该流的所有协议版本，避免去重后残留其他schema
+  const params = { vhost, app, stream, force: force ? 1 : 0 };
+  if (schema) params.schema = schema;
+  return request('close_streams', params);
 };
 
 /**
@@ -146,15 +149,32 @@ export const testConnection = async () => {
  * @param {Object} streamInfo - 流信息
  * @returns {Object} 各协议播放地址
  */
+/**
+ * 获取ZLMediaKit端口配置
+ * @returns {Object} 端口配置
+ */
+const getPortConfig = () => {
+  const saved = localStorage.getItem('sipConfig');
+  if (saved) {
+    const config = JSON.parse(saved);
+    return {
+      rtspPort: config.zlmRtspPort || 554,
+      rtmpPort: config.zlmRtmpPort || 1935
+    };
+  }
+  return { rtspPort: 554, rtmpPort: 1935 };
+};
+
 export const generatePlayUrls = (streamInfo) => {
   const config = getZLMConfig();
+  const ports = getPortConfig();
   const baseUrl = config.baseUrl.replace(/^https?:\/\//, '');
   const host = baseUrl.split(':')[0];
   const { app, stream } = streamInfo;
   
   return {
-    rtsp: `rtsp://${host}:554/${app}/${stream}`,
-    rtmp: `rtmp://${host}:1935/${app}/${stream}`,
+    rtsp: `rtsp://${host}:${ports.rtspPort}/${app}/${stream}`,
+    rtmp: `rtmp://${host}:${ports.rtmpPort}/${app}/${stream}`,
     flv: `http://${baseUrl}/${app}/${stream}.live.flv`,
     hls: `http://${baseUrl}/${app}/${stream}/hls.m3u8`,
     webrtc: `${config.baseUrl}/index/api/webrtc?app=${app}&stream=${stream}&type=play`

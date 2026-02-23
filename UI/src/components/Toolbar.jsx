@@ -59,6 +59,14 @@ function Toolbar({
         </button>
         
         <button 
+          className="toolbar-btn batch-stream"
+          onClick={onBatchStream}
+          disabled={loading || onlineCount === 0}
+        >
+          📡 批量推流
+        </button>
+        
+        <button 
           className="toolbar-btn settings"
           onClick={onOpenSettings}
         >
