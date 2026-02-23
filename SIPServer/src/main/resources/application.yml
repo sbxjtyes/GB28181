@@ -1,0 +1,165 @@
+# GB28181 SIP服务器配置文件
+server:
+  port: 8080
+  servlet:
+    context-path: /gb28181
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+# Spring配置
+spring:
+  application:
+    name: gb28181-sip-server
+
+  # HTTP编码配置
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+  # 消息编码配置
+  messages:
+    encoding: UTF-8
+    basename: messages
+    fallback-to-system-locale: false
+    use-code-as-default-message: false
+
+  # MySQL数据库配置
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:31306/gb28181_sip_server?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&autoReconnect=true&failOverReadOnly=false}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:Yf.31306}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: none  # 不自动生成表
+    show-sql: false # 不显示SQL语句
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        # 连接池配置
+        connection:
+          CharSet: UTF-8
+          characterEncoding: UTF-8
+          useUnicode: true
+    # 数据库初始化
+    defer-datasource-initialization: true # 延迟初始化数据源
+    # 关闭 open-in-view 警告
+    open-in-view: false
+  sql:
+    init: # SQL初始化
+      mode: never  # 不自动执行SQL脚本，手动执行
+  
+  # Jackson配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+# GB28181 SIP服务器配置
+gb28181:
+  sip:
+    # SIP服务器ID（20位GB28181编码）
+    server-id: ${GB28181_SERVER_ID:34020000002000000001}
+    # SIP服务器IP地址，默认监听所有接口
+    server-ip: ${GB28181_SERVER_IP:0.0.0.0}
+    # SIP服务器监听端口
+    server-port: ${GB28181_SERVER_PORT:5060}
+
+    # 设备信息存储的数据库表前缀（已改为MySQL存储）
+    sip-device-key: ${GB28181_SIP_DEVICE_KEY:gb28181_sip_device_key}
+    # SIP域
+    sip-domain: ${GB28181_SIP_DOMAIN:3402000000}
+    # 设备认证密码
+    device-password: ${GB28181_DEVICE_PASSWORD:Yf.31306}
+    # 心跳超时时间（秒）
+    heartbeat-timeout: ${GB28181_HEARTBEAT_TIMEOUT:60}
+    # 设备注册有效期（秒）
+    register-expires: ${GB28181_REGISTER_EXPIRES:3600}
+
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.gb28181.sipserver: DEBUG
+    io.netty: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/gb28181-sip-server.log
+    max-size: 100MB
+    max-history: 30
+
+# 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,threaddump,loggers
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+
+# 自定义配置
+app:
+  # 线程池配置
+  thread-pool:
+    async:
+      core-size: 10
+      max-size: 50
+      queue-capacity: 1000
+      keep-alive-seconds: 60
+    sip-message:
+      core-size: 10
+      max-size: 40
+      queue-capacity: 1000
+      keep-alive-seconds: 60
+    media:
+      core-size: 8
+      max-size: 32
+      queue-capacity: 2000
+      keep-alive-seconds: 60
+    push:
+      core-size: 4
+      max-size: 16
+      queue-capacity: 100
+      keep-alive-seconds: 300
+  
+  # 媒体处理配置
+  media:
+    # RTP包缓存大小
+    rtp-cache-size: 60
+    # UDP缓存帧数
+    udp-cache-frame-length: 5
+    # TCP缓存帧数
+    tcp-cache-frame-length: 2
+    # 推流超时时间（秒）
+    stream-timeout: 30
+    # 默认媒体服务器IP
+    default-server-ip: 192.168.97.12
+    # 默认媒体服务器端口
+    default-server-port: 30000
+    # 是否默认使用TCP推流
+    default-use-tcp: false
+  
+  # 设备管理配置
+  device:
+    # 设备清理间隔（秒）
+    cleanup-interval: 300
+    # 设备超时时间（秒）
+    timeout: 180

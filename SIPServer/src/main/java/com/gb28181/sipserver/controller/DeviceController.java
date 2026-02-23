@@ -1,0 +1,373 @@
+package com.gb28181.sipserver.controller;
+
+import com.gb28181.sipserver.entity.DeviceInfo;
+import com.gb28181.sipserver.service.DeviceService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 设备管理REST接口
+ * 
+ * 提供设备管理的HTTP API接口，包括：
+ * - 获取设备列表
+ * - 获取设备详情
+ * - 获取设备统计信息
+ * - 设备状态管理
+ * 
+ * @author GB28181 Team
+ * @version 1.0.0
+ */
+@RestController
+@RequestMapping("/api/devices")
+@CrossOrigin(origins = "*")
+public class DeviceController {
+
+    private static final Logger logger = LoggerFactory.getLogger(DeviceController.class);
+
+    @Autowired
+    private DeviceService deviceService;
+
+    /**
+     * 获取所有设备列表
+     * 
+     * @return 设备列表
+     */
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getAllDevices() {
+        logger.info("获取所有设备列表");
+
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            List<DeviceInfo> devices = deviceService.getAllDevices();
+            
+            response.put("success", true);
+            response.put("message", "获取设备列表成功");
+            response.put("total", devices.size());
+            response.put("devices", devices);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("获取设备列表异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 获取在线设备列表
+     *
+     * @return 在线设备列表
+     */
+    @GetMapping("/online")
+    public ResponseEntity<Map<String, Object>> getOnlineDevices() {
+        logger.info("获取在线设备列表");
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            List<DeviceInfo> onlineDevices = deviceService.getOnlineDevices();
+
+            response.put("success", true);
+            response.put("message", "获取在线设备列表成功");
+            response.put("total", onlineDevices.size());
+            response.put("devices", onlineDevices);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("获取在线设备列表异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+
+
+    /**
+     * 获取指定设备详情
+     * 
+     * @param deviceId 设备ID
+     * @return 设备详情
+     */
+    @GetMapping("/{deviceId}")
+    public ResponseEntity<Map<String, Object>> getDevice(@PathVariable String deviceId) {
+        logger.info("获取设备详情: deviceId={}", deviceId);
+
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            DeviceInfo device = deviceService.getDeviceInfo(deviceId);
+            
+            if (device == null) {
+                response.put("success", false);
+                response.put("message", "设备不存在: " + deviceId);
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            response.put("success", true);
+            response.put("message", "获取设备详情成功");
+            response.put("device", device);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("获取设备详情异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 获取设备统计信息
+     *
+     * @return 统计信息
+     */
+    @GetMapping("/statistics")
+    public ResponseEntity<Map<String, Object>> getDeviceStatistics() {
+        logger.info("获取设备统计信息");
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            List<DeviceInfo> allDevices = deviceService.getAllDevices();
+
+            long totalCount = allDevices.size();
+            long onlineCount = allDevices.stream().filter(device -> Boolean.TRUE.equals(device.getOnline())).count();
+
+            long offlineCount = totalCount - onlineCount;
+
+            Map<String, Object> statistics = new HashMap<>();
+            statistics.put("totalDevices", totalCount);
+            statistics.put("onlineDevices", onlineCount);
+            statistics.put("offlineDevices", offlineCount);
+            statistics.put("onlineRate", totalCount > 0 ? (double) onlineCount / totalCount * 100 : 0);
+
+            response.put("success", true);
+            response.put("message", "获取统计信息成功");
+            response.put("statistics", statistics);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("获取设备统计信息异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 删除设备
+     * 
+     * @param deviceId 设备ID
+     * @return 操作结果
+     */
+    @DeleteMapping("/{deviceId}")
+    public ResponseEntity<Map<String, Object>> deleteDevice(@PathVariable String deviceId) {
+        logger.info("删除设备: deviceId={}", deviceId);
+
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            DeviceInfo device = deviceService.getDeviceInfo(deviceId);
+            
+            if (device == null) {
+                response.put("success", false);
+                response.put("message", "设备不存在: " + deviceId);
+                return ResponseEntity.badRequest().body(response);
+            }
+
+
+
+            deviceService.removeDeviceInfo(deviceId);
+
+            response.put("success", true);
+            response.put("message", "设备删除成功");
+            response.put("deviceId", deviceId);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("删除设备异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 强制设备下线
+     *
+     * @param deviceId 设备ID
+     * @return 操作结果
+     */
+    @PostMapping("/{deviceId}/offline")
+    public ResponseEntity<Map<String, Object>> forceOffline(@PathVariable String deviceId) {
+        logger.info("强制设备下线: deviceId={}", deviceId);
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            DeviceInfo device = deviceService.getDeviceInfo(deviceId);
+
+            if (device == null) {
+                response.put("success", false);
+                response.put("message", "设备不存在: " + deviceId);
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            // 设置设备离线
+            deviceService.setDeviceOnline(deviceId, false);
+
+            response.put("success", true);
+            response.put("message", "设备已强制下线");
+            response.put("deviceId", deviceId);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("强制设备下线异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 强制设备重新注册
+     *
+     * @param deviceId 设备ID
+     * @return 操作结果
+     */
+    @PostMapping("/{deviceId}/force-reregister")
+    public ResponseEntity<Map<String, Object>> forceReregister(@PathVariable String deviceId) {
+        logger.info("强制设备重新注册: deviceId={}", deviceId);
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            DeviceInfo device = deviceService.getDeviceInfo(deviceId);
+
+            if (device == null) {
+                response.put("success", false);
+                response.put("message", "设备不存在: " + deviceId);
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            // 强制设备重新注册
+            boolean success = deviceService.forceDeviceReregister(deviceId);
+
+            if (success) {
+                response.put("success", true);
+                response.put("message", "设备已标记为强制重新注册，下次通信时将要求重新注册");
+                response.put("deviceId", deviceId);
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "强制重新注册失败");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+            }
+
+        } catch (Exception e) {
+            logger.error("强制设备重新注册异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 批量强制设备重新注册
+     *
+     * @param request 批量操作请求体
+     * @return 操作结果
+     */
+    @PostMapping("/batch/force-reregister")
+    public ResponseEntity<Map<String, Object>> batchForceReregister(
+            @RequestBody BatchForceReregisterRequest request) {
+        logger.info("批量强制设备重新注册: deviceIds={}", request.getDeviceIds());
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            if (request.getDeviceIds() == null || request.getDeviceIds().isEmpty()) {
+                response.put("success", false);
+                response.put("message", "设备ID列表不能为空");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            int successCount = deviceService.batchForceDeviceReregister(request.getDeviceIds());
+
+            response.put("success", true);
+            response.put("message", String.format("批量强制重新注册完成，成功处理 %d/%d 个设备", 
+                    successCount, request.getDeviceIds().size()));
+            response.put("totalCount", request.getDeviceIds().size());
+            response.put("successCount", successCount);
+            response.put("failureCount", request.getDeviceIds().size() - successCount);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("批量强制设备重新注册异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 强制所有在线设备重新注册
+     *
+     * @return 操作结果
+     */
+    @PostMapping("/all/force-reregister")
+    public ResponseEntity<Map<String, Object>> forceAllReregister() {
+        logger.info("强制所有在线设备重新注册");
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            int successCount = deviceService.forceAllOnlineDevicesReregister();
+
+            response.put("success", true);
+            response.put("message", String.format("强制所有在线设备重新注册完成，成功处理 %d 个设备", successCount));
+            response.put("successCount", successCount);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("强制所有在线设备重新注册异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 批量强制重新注册请求类
+     */
+    public static class BatchForceReregisterRequest {
+        private List<String> deviceIds;
+
+        public List<String> getDeviceIds() {
+            return deviceIds;
+        }
+
+        public void setDeviceIds(List<String> deviceIds) {
+            this.deviceIds = deviceIds;
+        }
+    }
+}
