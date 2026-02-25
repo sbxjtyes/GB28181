@@ -66,7 +66,7 @@ public class SipMessageTemplate {
                         + CRLF +
                         "Call-ID: {Call-ID}" + CRLF +
                         "CSeq: 1 INVITE" + CRLF +
-                        "From: <sip:{serverId}@{serverIp}:{serverPort}>;tag=live" + CRLF +
+                        "From: <sip:{serverId}@{serverIp}:{serverPort}>;tag={fromTag}" + CRLF +
                         "To: \"{deviceId}\" <sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort}>" + CRLF +
                         "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
                         "Max-Forwards: 70" + CRLF +
@@ -185,11 +185,13 @@ public class SipMessageTemplate {
 
         /**
          * 生成INVITE推流请求
+         * 
+         * @param fromTag 唯一的From-tag，用于标识SIP对话（RFC 3261要求每个对话使用唯一tag）
          */
         public String buildInviteRequest(String deviceId, String deviceLocalIp, String deviceLocalPort,
                         String callId, String serverId, String serverIp, String serverPort,
                         String ssrc, String mediaServerIp, String mediaServerPort,
-                        boolean useTcp) {
+                        boolean useTcp, String fromTag) {
                 String sdpContent = useTcp ? TEMPLATE_SDP_TCP : TEMPLATE_SDP_UDP;
                 sdpContent = sdpContent
                                 .replace("{deviceId}", deviceId)
@@ -206,6 +208,7 @@ public class SipMessageTemplate {
                                 .replace("{serverIp}", serverIp)
                                 .replace("{serverPort}", serverPort)
                                 .replace("{ssrc}", ssrc)
+                                .replace("{fromTag}", fromTag)
                                 .replace("{branchId}", SipUtils.getBranchId())
                                 .replace("{Content-Length}", String.valueOf(
                                                 sdpContent.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));

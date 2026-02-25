@@ -65,3 +65,4 @@
 ### Fixed
 - 修复 CORS 跨域配置仅允许内网 IP，导致公网访问时 UI 无法连接 SIP 服务器的问题
 - 清理误提交的 `SIPServer/target/` 编译产物
+- 修复多设备并发推流时第二路流卡住的问题，根因是 INVITE 请求的 `From` 头部 `tag` 参数硬编码为 `live`，违反 RFC 3261 对 SIP 对话唯一标识（Call-ID + From-tag + To-tag）的要求，改为每次推流会话生成唯一 tag

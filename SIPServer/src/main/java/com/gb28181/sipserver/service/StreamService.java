@@ -3,6 +3,7 @@ package com.gb28181.sipserver.service;
 import com.gb28181.sipserver.config.SipServerConfig;
 import com.gb28181.sipserver.entity.DeviceInfo;
 import com.gb28181.sipserver.netty.SipUdpServer;
+import com.gb28181.sipserver.util.SipUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,15 +42,15 @@ public class StreamService {
     /**
      * 开始推流
      * 
-     * @param deviceId 设备ID
-     * @param mediaServerIp 媒体服务器IP
+     * @param deviceId        设备ID
+     * @param mediaServerIp   媒体服务器IP
      * @param mediaServerPort 媒体服务器端口
-     * @param useTcp 是否使用TCP传输
+     * @param useTcp          是否使用TCP传输
      * @return 推流请求结果
      */
     public boolean startStream(String deviceId, String mediaServerIp, int mediaServerPort, boolean useTcp) {
-        logger.info("开始推流请求: 设备ID={}, 媒体服务器IP={}, 媒体服务器端口={}, 使用TCP={}", 
-                   deviceId, mediaServerIp, mediaServerPort, useTcp);
+        logger.info("开始推流请求: 设备ID={}, 媒体服务器IP={}, 媒体服务器端口={}, 使用TCP={}",
+                deviceId, mediaServerIp, mediaServerPort, useTcp);
 
         try {
             // 获取设备信息
@@ -72,12 +73,16 @@ public class StreamService {
             // 生成推流会话信息
             String callId = generateCallId(deviceId);
             String ssrc = generateSsrc(deviceId);
+            // 生成唯一的 From-tag，RFC 3261 要求每个对话使用唯一 tag
+            // 固定 tag 值会导致多路推流时设备或 NAT 混淆对话
+            String fromTag = SipUtils.generateTag();
 
             // 构建INVITE推流请求（使用sipIp而非监听IP，避免0.0.0.0出现在SIP头部）
             String inviteMessage = sipMessageTemplate.buildInviteRequest(
                     deviceId,
                     deviceInfo.getLocalIp() != null ? deviceInfo.getLocalIp() : deviceInfo.getIp(),
-                    String.valueOf(deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort()),
+                    String.valueOf(
+                            deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort()),
                     callId,
                     sipServerConfig.getServerId(),
                     sipServerConfig.getSipIp(),
@@ -85,8 +90,8 @@ public class StreamService {
                     ssrc,
                     mediaServerIp,
                     String.valueOf(mediaServerPort),
-                    useTcp
-            );
+                    useTcp,
+                    fromTag);
 
             // 发送INVITE请求
             boolean sent = sipUdpServer.sendMessage(inviteMessage, deviceInfo.getIp(), deviceInfo.getPort());
@@ -129,11 +134,11 @@ public class StreamService {
             }
 
             // 检查设备状态和会话信息
-            logger.debug("设备状态: live={}, callId={}, from={}, to={}", 
-                       deviceInfo.getLive(), 
-                       deviceInfo.getLiveCallID(),
-                       deviceInfo.getLiveFromInfo(),
-                       deviceInfo.getLiveToInfo());
+            logger.debug("设备状态: live={}, callId={}, from={}, to={}",
+                    deviceInfo.getLive(),
+                    deviceInfo.getLiveCallID(),
+                    deviceInfo.getLiveFromInfo(),
+                    deviceInfo.getLiveToInfo());
 
             // 改进：即使live状态不正确，只要有会话ID就尝试发送BYE
             String callId = deviceInfo.getLiveCallID();
@@ -145,18 +150,21 @@ public class StreamService {
             // 获取From和To信息，如果缺失则使用默认值
             String fromInfo = deviceInfo.getLiveFromInfo();
             String toInfo = deviceInfo.getLiveToInfo();
-            
+
             if (fromInfo == null || fromInfo.isEmpty()) {
-                fromInfo = "<sip:" + sipServerConfig.getServerId() + "@" + 
-                          sipServerConfig.getSipIp() + ":" + sipServerConfig.getServerPort() + ">;tag=live";
+                fromInfo = "<sip:" + sipServerConfig.getServerId() + "@" +
+                        sipServerConfig.getSipIp() + ":" + sipServerConfig.getServerPort() + ">;tag="
+                        + SipUtils.generateTag();
                 logger.warn("缺少From信息，使用默认值: {}", fromInfo);
             }
-            
+
             if (toInfo == null || toInfo.isEmpty()) {
                 String deviceLocalIp = deviceInfo.getLocalIp() != null ? deviceInfo.getLocalIp() : deviceInfo.getIp();
-                String deviceLocalPort = String.valueOf(deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort());
+                String deviceLocalPort = String
+                        .valueOf(deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort());
                 // fallback To 加 tag 参数，部分设备要求 BYE 的 To 必须包含 tag 才能匹配对话
-                toInfo = "\"" + deviceId + "\" <sip:" + deviceId + "@" + deviceLocalIp + ":" + deviceLocalPort + ">;tag=live";
+                toInfo = "\"" + deviceId + "\" <sip:" + deviceId + "@" + deviceLocalIp + ":" + deviceLocalPort
+                        + ">;tag=" + SipUtils.generateTag();
                 logger.warn("缺少To信息，使用默认值: {}", toInfo);
             }
 
@@ -164,14 +172,14 @@ public class StreamService {
             String byeMessage = sipMessageTemplate.buildByeRequest(
                     deviceId,
                     deviceInfo.getLocalIp() != null ? deviceInfo.getLocalIp() : deviceInfo.getIp(),
-                    String.valueOf(deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort()),
+                    String.valueOf(
+                            deviceInfo.getLocalPort() != null ? deviceInfo.getLocalPort() : deviceInfo.getPort()),
                     callId,
                     fromInfo,
                     toInfo,
                     sipServerConfig.getServerId(),
                     sipServerConfig.getSipIp(),
-                    String.valueOf(sipServerConfig.getServerPort())
-            );
+                    String.valueOf(sipServerConfig.getServerPort()));
 
             logger.debug("BYE消息内容:\n{}", byeMessage);
 
@@ -210,8 +218,7 @@ public class StreamService {
                 Boolean.TRUE.equals(deviceInfo.getOnline()),
                 Boolean.TRUE.equals(deviceInfo.getLive()),
                 deviceInfo.getLiveCallID(),
-                deviceInfo.getSsrc()
-        );
+                deviceInfo.getSsrc());
     }
 
     /**
@@ -226,7 +233,7 @@ public class StreamService {
      */
     private String generateSsrc(String deviceId) {
         if (StringUtils.isBlank(deviceId)) {
-            return "0100" + String.format("%04d", (int)(Math.random() * 10000));
+            return "0100" + String.format("%04d", (int) (Math.random() * 10000));
         }
 
         // 使用设备ID的hashCode + 当前时间戳生成4位数字，避免冲突
@@ -252,9 +259,20 @@ public class StreamService {
         }
 
         // Getters
-        public boolean isOnline() { return online; }
-        public boolean isStreaming() { return streaming; }
-        public String getCallId() { return callId; }
-        public String getSsrc() { return ssrc; }
+        public boolean isOnline() {
+            return online;
+        }
+
+        public boolean isStreaming() {
+            return streaming;
+        }
+
+        public String getCallId() {
+            return callId;
+        }
+
+        public String getSsrc() {
+            return ssrc;
+        }
     }
 }
