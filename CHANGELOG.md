@@ -66,3 +66,7 @@
 - 修复 CORS 跨域配置仅允许内网 IP，导致公网访问时 UI 无法连接 SIP 服务器的问题
 - 清理误提交的 `SIPServer/target/` 编译产物
 - 修复多设备并发推流时第二路流卡住的问题，根因是 INVITE 请求的 `From` 头部 `tag` 参数硬编码为 `live`，违反 RFC 3261 对 SIP 对话唯一标识（Call-ID + From-tag + To-tag）的要求，改为每次推流会话生成唯一 tag
+- 修复多个播放器客户端同时拉流时只有一台能正常播放、其他卡住的问题，调整 ZLMediaKit 配置：
+  - `mergeWriteMS` 从 `0` 改为 `300`：启用帧合并写入，避免多客户端 I/O 竞争
+  - `directProxy` 从 `1` 改为 `0`（RTSP/RTMP）：关闭直接代理，经过完整帧分发管线支持多客户端扇出
+  - `sendBufSize` 从 `65536` 改为 `262144`：扩大 HTTP 发送缓冲区

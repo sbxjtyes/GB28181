@@ -108,6 +108,18 @@ MediaServer.exe     # Windows
 ./MediaServer &     # Linux
 ```
 
+#### ZKServer 关键配置项（config.ini）
+
+| 配置节 | 参数 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `[general]` | `mergeWriteMS` | `300` | 帧合并写入间隔（毫秒）。设为 `0` 会导致多客户端拉流时 I/O 竞争，仅一台能正常播放。推荐 `300` |
+| `[rtsp]` | `directProxy` | `0` | RTSP 直接代理模式。设为 `1` 会绕过帧分发管线，导致多客户端无法同时播放。必须设为 `0` |
+| `[rtmp]` | `directProxy` | `0` | RTMP 直接代理模式。同上，必须设为 `0` |
+| `[http]` | `sendBufSize` | `262144` | HTTP 发送缓冲区大小（字节）。过小会导致多客户端 HTTP-FLV/HLS 播放阻塞。推荐 `262144`（256KB） |
+| `[rtp_proxy]` | `port_range` | `30000-35000` | RTP 接收端口范围，需在防火墙中开放 |
+| `[rtp_proxy]` | `gop_cache` | `1` | GOP 缓存，确保新客户端快速出画面 |
+| `[api]` | `secret` | — | API 密钥，生产环境必须修改 |
+
 ### 4.4 UI 部署
 
 #### 开发模式
@@ -164,3 +176,9 @@ curl http://localhost:88/index/api/getServerConfig
 - 确认 ZKServer 已启动且 RTP 端口范围已开放
 - 检查摄像头与 ZKServer 之间的网络连通性
 - 查看 SIPServer 日志，确认 INVITE 消息已正确发送
+
+### 7.4 多个播放器同时拉流时只有一台能正常播放
+- 检查 `config.ini` 中 `mergeWriteMS` 是否为 `0`，必须设为 `300`
+- 检查 `[rtsp]` 和 `[rtmp]` 下的 `directProxy` 是否为 `1`，必须设为 `0`
+- 检查 `[http]` 下 `sendBufSize` 是否过小，推荐 `262144`
+- 修改配置后需重启 `MediaServer.exe` 生效
