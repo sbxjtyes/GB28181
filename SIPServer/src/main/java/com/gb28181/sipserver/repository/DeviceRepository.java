@@ -1,6 +1,8 @@
 package com.gb28181.sipserver.repository;
 
 import com.gb28181.sipserver.entity.DeviceInfo;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -31,6 +33,15 @@ public interface DeviceRepository extends JpaRepository<DeviceInfo, String> {
      * @return 设备列表
      */
     List<DeviceInfo> findByOnline(Boolean online);
+
+    /**
+     * 根据在线状态分页查询设备
+     * 
+     * @param online   在线状态
+     * @param pageable 分页参数
+     * @return 分页设备列表
+     */
+    Page<DeviceInfo> findByOnline(Boolean online, Pageable pageable);
 
     /**
      * 根据推流状态查询设备
@@ -64,7 +75,7 @@ public interface DeviceRepository extends JpaRepository<DeviceInfo, String> {
      * 更新设备在线状态
      * 
      * @param deviceId 设备ID
-     * @param online 在线状态
+     * @param online   在线状态
      * @return 更新的记录数
      */
     @Modifying
@@ -76,7 +87,7 @@ public interface DeviceRepository extends JpaRepository<DeviceInfo, String> {
      * 更新设备推流状态
      * 
      * @param deviceId 设备ID
-     * @param live 推流状态
+     * @param live     推流状态
      * @return 更新的记录数
      */
     @Modifying
@@ -106,4 +117,74 @@ public interface DeviceRepository extends JpaRepository<DeviceInfo, String> {
      * @return 僵尸会话设备列表
      */
     List<DeviceInfo> findByLiveCallIDIsNotNullAndLive(Boolean live);
+
+    // ============ 原子更新方法（解决并发竞态条件） ============
+
+    /**
+     * 原子更新设备心跳（仅更新心跳相关字段，不影响推流状态）
+     *
+     * @param deviceId 设备ID
+     * @param now      当前时间戳
+     * @return 更新的记录数
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE DeviceInfo d SET d.lastHeartbeatTime = :now, d.time = :now, d.online = true WHERE d.deviceId = :deviceId")
+    int atomicUpdateHeartbeat(@Param("deviceId") String deviceId, @Param("now") Long now);
+
+    /**
+     * 原子更新设备推流信息（仅更新推流相关字段，不影响心跳状态）
+     *
+     * @param deviceId 设备ID
+     * @param callId   会话ID
+     * @param fromInfo From信息
+     * @param toInfo   To信息
+     * @param ssrc     SSRC
+     * @return 更新的记录数
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE DeviceInfo d SET d.liveCallID = :callId, d.liveFromInfo = :fromInfo, " +
+            "d.liveToInfo = :toInfo, d.ssrc = :ssrc, d.live = true WHERE d.deviceId = :deviceId")
+    int atomicUpdateLiveInfo(@Param("deviceId") String deviceId,
+            @Param("callId") String callId,
+            @Param("fromInfo") String fromInfo,
+            @Param("toInfo") String toInfo,
+            @Param("ssrc") String ssrc);
+
+    /**
+     * 原子清除设备推流信息
+     *
+     * @param deviceId 设备ID
+     * @return 更新的记录数
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE DeviceInfo d SET d.liveCallID = null, d.liveFromInfo = null, " +
+            "d.liveToInfo = null, d.ssrc = null, d.live = false WHERE d.deviceId = :deviceId")
+    int atomicClearLiveInfo(@Param("deviceId") String deviceId);
+
+    /**
+     * 原子标记设备需要强制重新注册
+     *
+     * @param deviceId 设备ID
+     * @param now      当前时间戳
+     * @return 更新的记录数
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE DeviceInfo d SET d.forceReregister = true, d.forceReregisterTime = :now, " +
+            "d.online = false WHERE d.deviceId = :deviceId")
+    int atomicMarkForceReregister(@Param("deviceId") String deviceId, @Param("now") Long now);
+
+    /**
+     * 原子清除强制重新注册标记
+     *
+     * @param deviceId 设备ID
+     * @return 更新的记录数
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE DeviceInfo d SET d.forceReregister = false, d.forceReregisterTime = null WHERE d.deviceId = :deviceId")
+    int atomicClearForceReregister(@Param("deviceId") String deviceId);
 }

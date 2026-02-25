@@ -7,6 +7,8 @@ import com.gb28181.sipserver.util.ConsoleHighlight;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -40,7 +42,7 @@ public class DeviceService {
     /**
      * 保存设备信息
      *
-     * @param deviceId 设备ID
+     * @param deviceId   设备ID
      * @param deviceInfo 设备信息
      */
     public void saveDeviceInfo(String deviceId, DeviceInfo deviceInfo) {
@@ -111,7 +113,26 @@ public class DeviceService {
         }
     }
 
+    /**
+     * 分页获取设备列表
+     *
+     * @param pageable 分页参数
+     * @return 分页设备列表
+     */
+    public Page<DeviceInfo> getDevicesPage(Pageable pageable) {
+        return deviceRepository.findAll(pageable);
+    }
 
+    /**
+     * 按在线状态分页获取设备列表
+     *
+     * @param online   在线状态
+     * @param pageable 分页参数
+     * @return 分页设备列表
+     */
+    public Page<DeviceInfo> getDevicesByOnlineStatus(Boolean online, Pageable pageable) {
+        return deviceRepository.findByOnline(online, pageable);
+    }
 
     /**
      * 更新设备心跳
@@ -119,11 +140,13 @@ public class DeviceService {
      * @param deviceId 设备ID
      */
     public void updateDeviceHeartbeat(String deviceId) {
-        DeviceInfo deviceInfo = getDeviceInfo(deviceId);
-        if (deviceInfo != null) {
-            deviceInfo.updateHeartbeat();
-            saveDeviceInfo(deviceId, deviceInfo);
-            logger.debug("更新设备心跳: {}", deviceId);
+        try {
+            int updated = deviceRepository.atomicUpdateHeartbeat(deviceId, System.currentTimeMillis());
+            if (updated > 0) {
+                logger.debug("更新设备心跳: {}", deviceId);
+            }
+        } catch (Exception e) {
+            logger.error("更新设备心跳失败: {}, 错误: {}", deviceId, e.getMessage(), e);
         }
     }
 
@@ -131,7 +154,7 @@ public class DeviceService {
      * 设置设备在线状态
      * 
      * @param deviceId 设备ID
-     * @param online 在线状态
+     * @param online   在线状态
      */
     public void setDeviceOnline(String deviceId, boolean online) {
         DeviceInfo deviceInfo = getDeviceInfo(deviceId);
@@ -149,14 +172,14 @@ public class DeviceService {
      * 设置设备推流状态
      *
      * @param deviceId 设备ID
-     * @param live 推流状态
+     * @param live     推流状态
      */
     public void setDeviceLive(String deviceId, boolean live) {
-        DeviceInfo deviceInfo = getDeviceInfo(deviceId);
-        if (deviceInfo != null) {
-            deviceInfo.setLive(live);
-            saveDeviceInfo(deviceId, deviceInfo);
+        try {
+            deviceRepository.updateLiveStatus(deviceId, live);
             logger.info("设备 {} 推流状态变更为: {}", deviceId, live ? "推流中" : "停止推流");
+        } catch (Exception e) {
+            logger.error("设置设备推流状态失败: {}, 错误: {}", deviceId, e.getMessage(), e);
         }
     }
 
@@ -164,21 +187,19 @@ public class DeviceService {
      * 更新设备推流信息
      *
      * @param deviceId 设备ID
-     * @param callId 会话ID
+     * @param callId   会话ID
      * @param fromInfo From信息
-     * @param toInfo To信息
-     * @param ssrc SSRC
+     * @param toInfo   To信息
+     * @param ssrc     SSRC
      */
     public void updateDeviceLiveInfo(String deviceId, String callId, String fromInfo, String toInfo, String ssrc) {
-        DeviceInfo deviceInfo = getDeviceInfo(deviceId);
-        if (deviceInfo != null) {
-            deviceInfo.setLiveCallID(callId);
-            deviceInfo.setLiveFromInfo(fromInfo);
-            deviceInfo.setLiveToInfo(toInfo);
-            deviceInfo.setSsrc(ssrc);
-            deviceInfo.setLive(true);
-            saveDeviceInfo(deviceId, deviceInfo);
-            logger.info("更新设备推流信息: 设备ID={}, 会话ID={}, SSRC={}", deviceId, callId, ssrc);
+        try {
+            int updated = deviceRepository.atomicUpdateLiveInfo(deviceId, callId, fromInfo, toInfo, ssrc);
+            if (updated > 0) {
+                logger.info("更新设备推流信息: 设备ID={}, 会话ID={}, SSRC={}", deviceId, callId, ssrc);
+            }
+        } catch (Exception e) {
+            logger.error("更新设备推流信息失败: {}, 错误: {}", deviceId, e.getMessage(), e);
         }
     }
 
@@ -188,15 +209,13 @@ public class DeviceService {
      * @param deviceId 设备ID
      */
     public void clearDeviceLiveInfo(String deviceId) {
-        DeviceInfo deviceInfo = getDeviceInfo(deviceId);
-        if (deviceInfo != null) {
-            deviceInfo.setLiveCallID(null);
-            deviceInfo.setLiveFromInfo(null);
-            deviceInfo.setLiveToInfo(null);
-            deviceInfo.setSsrc(null);
-            deviceInfo.setLive(false);
-            saveDeviceInfo(deviceId, deviceInfo);
-            logger.info("清除设备推流信息: 设备ID={}", deviceId);
+        try {
+            int updated = deviceRepository.atomicClearLiveInfo(deviceId);
+            if (updated > 0) {
+                logger.info("清除设备推流信息: 设备ID={}", deviceId);
+            }
+        } catch (Exception e) {
+            logger.error("清除设备推流信息失败: {}, 错误: {}", deviceId, e.getMessage(), e);
         }
     }
 
@@ -209,7 +228,7 @@ public class DeviceService {
         try {
             long totalCount = deviceRepository.count();
             long onlineCount = deviceRepository.countOnlineDevices();
-            return new DeviceStatistics((int)totalCount, (int)onlineCount);
+            return new DeviceStatistics((int) totalCount, (int) onlineCount);
         } catch (Exception e) {
             logger.error("获取设备统计信息失败: {}", e.getMessage(), e);
             return new DeviceStatistics(0, 0);
@@ -224,19 +243,12 @@ public class DeviceService {
      */
     public boolean forceDeviceReregister(String deviceId) {
         try {
-            DeviceInfo deviceInfo = getDeviceInfo(deviceId);
-            if (deviceInfo == null) {
+            int updated = deviceRepository.atomicMarkForceReregister(deviceId, System.currentTimeMillis());
+            if (updated == 0) {
                 logger.warn("设备不存在，无法强制重新注册: {}", deviceId);
                 return false;
             }
-
-            // 标记设备需要强制重新注册，同时标记为离线
-            deviceInfo.markForceReregister();
-            deviceInfo.setOnline(false);  // 同时标记为离线，确保设备需要重新注册
-            saveDeviceInfo(deviceId, deviceInfo);
-            
-            logger.info("设备已标记为强制重新注册（离线）: {}, forceReregister={}", 
-                deviceId, deviceInfo.needForceReregister());
+            logger.info("设备已标记为强制重新注册（离线）: {}", deviceId);
             return true;
         } catch (Exception e) {
             logger.error("强制设备重新注册失败: {}, 错误: {}", deviceId, e.getMessage(), e);
@@ -272,7 +284,7 @@ public class DeviceService {
             List<String> deviceIds = onlineDevices.stream()
                     .map(DeviceInfo::getDeviceId)
                     .collect(Collectors.toList());
-            
+
             int successCount = batchForceDeviceReregister(deviceIds);
             logger.info("强制所有在线设备重新注册完成: 成功 {}/{} 个设备", successCount, deviceIds.size());
             return successCount;
@@ -289,13 +301,10 @@ public class DeviceService {
      */
     public void handleDeviceRegistered(String deviceId) {
         try {
-            DeviceInfo deviceInfo = getDeviceInfo(deviceId);
-            if (deviceInfo != null && deviceInfo.needForceReregister()) {
-                deviceInfo.clearForceReregister();
-                saveDeviceInfo(deviceId, deviceInfo);
-                // 使用高亮显示设备注册成功信息
-                logger.info(ConsoleHighlight.safeColor("设备注册成功，清除强制重新注册标记: " + deviceId, 
-                    ConsoleHighlight.BRIGHT_GREEN));
+            int updated = deviceRepository.atomicClearForceReregister(deviceId);
+            if (updated > 0) {
+                logger.info(ConsoleHighlight.safeColor("设备注册成功，清除强制重新注册标记: " + deviceId,
+                        ConsoleHighlight.BRIGHT_GREEN));
             }
         } catch (Exception e) {
             logger.error("处理设备注册成功失败: {}, 错误: {}", deviceId, e.getMessage(), e);
@@ -329,7 +338,7 @@ public class DeviceService {
             List<DeviceInfo> staleDevices = deviceRepository.findByLiveCallIDIsNotNullAndLive(false);
             long now = System.currentTimeMillis();
             int cleaned = 0;
-            
+
             for (DeviceInfo device : staleDevices) {
                 // 尝试从CallID中提取时间戳
                 try {
@@ -340,8 +349,8 @@ public class DeviceService {
                         if (now - timestamp > 30000) { // 超过30秒
                             clearDeviceLiveInfo(device.getDeviceId());
                             cleaned++;
-                            logger.info("清理僵尸推流会话: 设备ID={}, callId={}", 
-                                device.getDeviceId(), callId);
+                            logger.info("清理僵尸推流会话: 设备ID={}, callId={}",
+                                    device.getDeviceId(), callId);
                         }
                     }
                 } catch (NumberFormatException e) {
@@ -350,7 +359,7 @@ public class DeviceService {
                     cleaned++;
                 }
             }
-            
+
             if (cleaned > 0) {
                 logger.info("本次清理僵尸推流会话数量: {}", cleaned);
             }
@@ -392,8 +401,6 @@ public class DeviceService {
             logger.error("清理超时设备失败: {}", e.getMessage(), e);
         }
     }
-
-
 
     /**
      * 设备统计信息内部类

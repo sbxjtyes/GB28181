@@ -11,6 +11,8 @@ import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.NotNull;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 
 /**
@@ -54,8 +56,6 @@ public class SipServerConfig {
      */
     private String sipIp;
 
-
-
     /**
      * 设备信息存储的数据库表前缀标识
      */
@@ -83,6 +83,13 @@ public class SipServerConfig {
     private Integer registerExpires = 3600;
 
     /**
+     * SIP协议字符集，默认UTF-8
+     * GB28181-2016标准默认GB2312，旧设备中文字段可能使用GB2312编码
+     * 可选值：UTF-8（默认）、GBK（兼容GB2312）
+     */
+    private String sipCharset = "UTF-8";
+
+    /**
      * 初始化时检测实际IP，避免0.0.0.0出现在SIP消息头中
      */
     @PostConstruct
@@ -106,7 +113,8 @@ public class SipServerConfig {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 NetworkInterface ni = interfaces.nextElement();
-                if (ni.isLoopback() || !ni.isUp()) continue;
+                if (ni.isLoopback() || !ni.isUp())
+                    continue;
                 Enumeration<InetAddress> addresses = ni.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
@@ -170,8 +178,6 @@ public class SipServerConfig {
         this.sipDeviceKey = sipDeviceKey;
     }
 
-
-
     public String getSipDomain() {
         return sipDomain;
     }
@@ -204,7 +210,28 @@ public class SipServerConfig {
         this.registerExpires = registerExpires;
     }
 
+    public String getSipCharset() {
+        return sipCharset;
+    }
 
+    public void setSipCharset(String sipCharset) {
+        this.sipCharset = sipCharset;
+    }
+
+    /**
+     * 获取SIP协议使用的Charset对象
+     * 如果配置值无效则回退为UTF-8
+     *
+     * @return Charset对象
+     */
+    public Charset getCharset() {
+        try {
+            return Charset.forName(sipCharset);
+        } catch (Exception e) {
+            logger.warn("配置的SIP字符集无效: {}，回退为UTF-8", sipCharset);
+            return StandardCharsets.UTF_8;
+        }
+    }
 
     @Override
     public String toString() {
@@ -216,6 +243,7 @@ public class SipServerConfig {
                 ", sipDomain='" + sipDomain + '\'' +
                 ", heartbeatTimeout=" + heartbeatTimeout +
                 ", registerExpires=" + registerExpires +
+                ", sipCharset='" + sipCharset + '\'' +
                 '}';
     }
 }

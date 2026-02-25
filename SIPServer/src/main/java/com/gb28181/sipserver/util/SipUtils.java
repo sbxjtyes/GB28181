@@ -25,7 +25,7 @@ import java.util.UUID;
 public class SipUtils {
 
     private static final Random RANDOM = new Random();
-    
+
     /**
      * 生成SSRC（同步源标识符）
      * 
@@ -36,18 +36,18 @@ public class SipUtils {
         if (StringUtils.isEmpty(prefix)) {
             prefix = "010000";
         }
-        
+
         // 确保前缀长度为6位
         if (prefix.length() < 6) {
             prefix = StringUtils.leftPad(prefix, 6, '0');
         } else if (prefix.length() > 6) {
             prefix = prefix.substring(0, 6);
         }
-        
+
         // 生成4位随机数
         int randomNum = RANDOM.nextInt(10000);
         String suffix = String.format("%04d", randomNum);
-        
+
         return prefix + suffix;
     }
 
@@ -85,21 +85,21 @@ public class SipUtils {
      * 生成SIP认证响应
      * 
      * @param username 用户名
-     * @param realm 域
+     * @param realm    域
      * @param password 密码
-     * @param nonce 随机数
-     * @param method 方法
-     * @param uri URI
+     * @param nonce    随机数
+     * @param method   方法
+     * @param uri      URI
      * @return 认证响应
      */
-    public static String generateAuthResponse(String username, String realm, String password, 
-                                            String nonce, String method, String uri) {
+    public static String generateAuthResponse(String username, String realm, String password,
+            String nonce, String method, String uri) {
         // HA1 = MD5(username:realm:password)
         String ha1 = DigestUtils.md5Hex(username + ":" + realm + ":" + password);
-        
+
         // HA2 = MD5(method:uri)
         String ha2 = DigestUtils.md5Hex(method + ":" + uri);
-        
+
         // Response = MD5(HA1:nonce:HA2)
         return DigestUtils.md5Hex(ha1 + ":" + nonce + ":" + ha2);
     }
@@ -108,16 +108,16 @@ public class SipUtils {
      * 验证SIP认证响应
      * 
      * @param username 用户名
-     * @param realm 域
+     * @param realm    域
      * @param password 密码
-     * @param nonce 随机数
-     * @param method 方法
-     * @param uri URI
+     * @param nonce    随机数
+     * @param method   方法
+     * @param uri      URI
      * @param response 客户端响应
      * @return 验证结果
      */
     public static boolean verifyAuthResponse(String username, String realm, String password,
-                                           String nonce, String method, String uri, String response) {
+            String nonce, String method, String uri, String response) {
         String expectedResponse = generateAuthResponse(username, realm, password, nonce, method, uri);
         return StringUtils.equals(expectedResponse, response);
     }
@@ -125,7 +125,7 @@ public class SipUtils {
     /**
      * 生成随机Nonce
      * 
-     * @param callId Call-ID
+     * @param callId   Call-ID
      * @param deviceId 设备ID
      * @return 生成的Nonce
      */
@@ -136,7 +136,7 @@ public class SipUtils {
     /**
      * 替换字符串中的占位符
      * 
-     * @param template 模板字符串
+     * @param template    模板字符串
      * @param placeholder 占位符
      * @param replacement 替换值
      * @return 替换后的字符串
@@ -145,11 +145,11 @@ public class SipUtils {
         if (StringUtils.isEmpty(template) || StringUtils.isEmpty(placeholder)) {
             return template;
         }
-        
+
         if (replacement == null) {
             replacement = "";
         }
-        
+
         // 转义特殊字符
         String escapedPlaceholder = placeholder;
         if (placeholder.contains("{")) {
@@ -158,7 +158,7 @@ public class SipUtils {
         if (placeholder.contains("}")) {
             escapedPlaceholder = escapedPlaceholder.replace("}", "\\}");
         }
-        
+
         return template.replaceAll(escapedPlaceholder, replacement);
     }
 
@@ -172,7 +172,7 @@ public class SipUtils {
         if (StringUtils.isEmpty(deviceId)) {
             return "0000";
         }
-        
+
         if (deviceId.length() >= 4) {
             return deviceId.substring(deviceId.length() - 4);
         } else {
@@ -190,7 +190,7 @@ public class SipUtils {
         if (StringUtils.isEmpty(deviceId)) {
             return false;
         }
-        
+
         // GB28181设备ID应该是20位数字
         return deviceId.matches("\\d{20}");
     }
@@ -205,7 +205,7 @@ public class SipUtils {
         if (StringUtils.isEmpty(serverId)) {
             return false;
         }
-        
+
         // GB28181服务器ID应该是20位数字
         return serverId.matches("\\d{20}");
     }
@@ -229,7 +229,8 @@ public class SipUtils {
      * @return 生成的Tag
      */
     public static String generateTag() {
-        return String.valueOf(Math.abs(RANDOM.nextLong()));
+        // 使用位运算替代 Math.abs，避免 Long.MIN_VALUE 返回负数
+        return String.valueOf(RANDOM.nextLong() & 0x7FFFFFFFFFFFFFFFL);
     }
 
     /**
@@ -242,7 +243,7 @@ public class SipUtils {
         if (StringUtils.isEmpty(via)) {
             return null;
         }
-        
+
         String[] parts = via.split(";");
         for (String part : parts) {
             if (part.trim().startsWith("received=")) {
@@ -262,7 +263,7 @@ public class SipUtils {
         if (StringUtils.isEmpty(via)) {
             return null;
         }
-        
+
         String[] parts = via.split(";");
         for (String part : parts) {
             if (part.trim().startsWith("rport=")) {

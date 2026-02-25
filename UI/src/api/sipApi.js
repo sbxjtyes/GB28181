@@ -41,7 +41,7 @@ export const getSettings = () => getConfig();
 const request = async (endpoint, options = {}) => {
   const config = getConfig();
   const url = `${config.baseUrl}${endpoint}`;
-  
+
   try {
     const response = await fetch(url, {
       headers: {
@@ -50,7 +50,7 @@ const request = async (endpoint, options = {}) => {
       },
       ...options
     });
-    
+
     const data = await response.json();
     return data;
   } catch (error) {
@@ -66,11 +66,24 @@ const request = async (endpoint, options = {}) => {
 export const getDevices = () => request('/api/devices');
 
 /**
+ * 分页获取设备列表（适用于设备数量较大的场景）
+ * @param {number} page - 页码（从0开始）
+ * @param {number} size - 每页数量（默认50）
+ * @param {boolean|null} online - 可选，筛选在线状态
+ * @returns {Promise<Object>} 分页设备列表响应
+ */
+export const getDevicesPage = (page = 0, size = 50, online = null) => {
+  let url = `/api/devices/page?page=${page}&size=${size}`;
+  if (online !== null) url += `&online=${online}`;
+  return request(url);
+};
+
+/**
  * 强制单个设备重新注册
  * @param {string} deviceId - 设备ID
  * @returns {Promise<Object>} 操作结果
  */
-export const forceReregister = (deviceId) => 
+export const forceReregister = (deviceId) =>
   request(`/api/devices/${deviceId}/force-reregister`, { method: 'POST' });
 
 /**
@@ -78,7 +91,7 @@ export const forceReregister = (deviceId) =>
  * @param {string[]} deviceIds - 设备ID列表
  * @returns {Promise<Object>} 操作结果
  */
-export const batchForceReregister = (deviceIds) => 
+export const batchForceReregister = (deviceIds) =>
   request('/api/devices/batch/force-reregister', {
     method: 'POST',
     body: JSON.stringify({ deviceIds })
@@ -110,7 +123,7 @@ export const startStreamWithConfig = (deviceId, streamConfig) => {
  * @param {string} deviceId - 设备ID
  * @returns {Promise<Object>} 操作结果
  */
-export const stopStream = (deviceId) => 
+export const stopStream = (deviceId) =>
   request('/api/stream/stop', {
     method: 'POST',
     body: JSON.stringify({ deviceId })

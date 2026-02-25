@@ -20,23 +20,30 @@ function App() {
   const [connected, setConnected] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState(api.getSettings());
-  const [message, setMessage] = useState(null);
+  const [messages, setMessages] = useState([]); // 消息队列（支持多条叠显）
   const [activeTab, setActiveTab] = useState('devices'); // 标签页状态
   const [streamConfigOpen, setStreamConfigOpen] = useState(false); // 推流配置对话框
   const [selectedDevice, setSelectedDevice] = useState(null); // 选中的设备
 
-  // 消息定时器引用，防止多次调用时旧 timer 提前清除新消息
-  const messageTimerRef = useRef(null);
+  // 消息ID计数器
+  const messageIdRef = useRef(0);
 
   /**
-   * 显示提示消息
+   * 显示提示消息（追加到队列，支持多条同时显示）
    * @param {string} text - 消息内容
    * @param {string} type - 消息类型 (success/error/info)
    */
   const showMessage = useCallback((text, type = 'info') => {
-    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
-    setMessage({ text, type });
-    messageTimerRef.current = setTimeout(() => setMessage(null), 3000);
+    const id = ++messageIdRef.current;
+    setMessages(prev => {
+      // 最多保留3条，超出则移除最旧的
+      const next = prev.length >= 3 ? prev.slice(1) : prev;
+      return [...next, { id, text, type }];
+    });
+    // 3秒后自动移除该条消息
+    setTimeout(() => {
+      setMessages(prev => prev.filter(m => m.id !== id));
+    }, 3000);
   }, []);
 
   /**
@@ -116,21 +123,21 @@ function App() {
     const { deviceId, port, useTcp } = config;
     // 使用确定性streamId，便于停流时关闭对应RTP端口
     const rtpStreamId = `rtp_${deviceId}`;
-    
+
     try {
       // 步骤1：先在ZKServer开启RTP收流端口
       const portLabel = port === 0 ? '自动分配' : port;
       showMessage(`正在开启RTP端口 ${portLabel}...`, 'info');
       const rtpResult = await zlmApi.openRtpServer(port, rtpStreamId, useTcp ? 1 : 0);
-      
+
       if (!rtpResult.success) {
         showMessage(`开启RTP端口失败: ${rtpResult.message}`, 'error');
         return;
       }
-      
+
       const actualPort = rtpResult.data?.port || port;
       showMessage(`RTP端口 ${actualPort} 已开启，正在发送INVITE...`, 'info');
-      
+
       // 步骤2：调用SIP服务器发送INVITE请求
       const serverSettings = api.getSettings();
       const result = await api.startStreamWithConfig(deviceId, {
@@ -138,7 +145,7 @@ function App() {
         mediaServerPort: actualPort,
         useTcp
       });
-      
+
       if (result.success) {
         if (result.alreadyStreaming) {
           // 设备已在推流，关闭多余的RTP端口
@@ -157,7 +164,7 @@ function App() {
       }
     } catch (err) {
       // 异常时也需要关闭已开启的RTP端口，避免泄漏
-      await zlmApi.closeRtpServer(rtpStreamId).catch(() => {});
+      await zlmApi.closeRtpServer(rtpStreamId).catch(() => { });
       showMessage(`推流异常: ${err.message}`, 'error');
     }
   };
@@ -172,7 +179,7 @@ function App() {
       if (result.success) {
         // 同时关闭ZLM上对应的RTP收流端口，避免资源泄漏
         const rtpStreamId = `rtp_${deviceId}`;
-        await zlmApi.closeRtpServer(rtpStreamId).catch(() => {});
+        await zlmApi.closeRtpServer(rtpStreamId).catch(() => { });
         showMessage(`${deviceId} 推流已停止`, 'success');
         refreshDevices(true);
       } else {
@@ -192,7 +199,7 @@ function App() {
       showMessage('没有离线设备需要注册', 'info');
       return;
     }
-    
+
     const deviceIds = offlineDevices.map(d => d.deviceId);
     setLoading(true);
     try {
@@ -219,49 +226,63 @@ function App() {
       showMessage('没有可推流的在线设备', 'info');
       return;
     }
-    
+
     setLoading(true);
     let successCount = 0;
     const serverSettings = api.getSettings();
-    
+    const BATCH_SIZE = 5; // 每批并发处理5台设备，平衡速度和服务器压力
+
+    /**
+     * 单个设备的推流任务（开RTP端口 → 发INVITE）
+     * @param {Object} device - 设备信息
+     * @returns {boolean} 是否成功
+     */
+    const streamOneDevice = async (device) => {
+      const rtpStreamId = `rtp_${device.deviceId}`;
+      try {
+        // 步骤1：开启RTP端口（port=0 让ZLM自动分配，避免端口冲突）
+        const rtpResult = await zlmApi.openRtpServer(0, rtpStreamId, 0);
+        if (!rtpResult.success) {
+          console.warn(`设备 ${device.deviceId} 开启RTP端口失败:`, rtpResult.message);
+          return false;
+        }
+        const actualPort = rtpResult.data?.port;
+        if (!actualPort) {
+          console.warn(`设备 ${device.deviceId} 未返回有效端口`);
+          await zlmApi.closeRtpServer(rtpStreamId);
+          return false;
+        }
+
+        // 步骤2：发送INVITE
+        const result = await api.startStreamWithConfig(device.deviceId, {
+          mediaServerIp: serverSettings.mediaServerIp,
+          mediaServerPort: actualPort,
+          useTcp: false
+        });
+
+        if (result.success) {
+          if (result.alreadyStreaming) {
+            await zlmApi.closeRtpServer(rtpStreamId);
+          }
+          return true;
+        } else {
+          await zlmApi.closeRtpServer(rtpStreamId);
+          return false;
+        }
+      } catch (err) {
+        await zlmApi.closeRtpServer(rtpStreamId).catch(() => { });
+        console.warn(`设备 ${device.deviceId} 推流失败:`, err);
+        return false;
+      }
+    };
+
     try {
-      for (const device of onlineDevices) {
-        // 声明在try外部，确保catch块可访问
-        const rtpStreamId = `rtp_${device.deviceId}`;
-        try {
-          // 步骤1：开启RTP端口（port=0 让ZLM自动分配，避免端口冲突）
-          const rtpResult = await zlmApi.openRtpServer(0, rtpStreamId, 0);
-          if (!rtpResult.success) {
-            console.warn(`设备 ${device.deviceId} 开启RTP端口失败:`, rtpResult.message);
-            continue;
-          }
-          const actualPort = rtpResult.data?.port;
-          if (!actualPort) {
-            console.warn(`设备 ${device.deviceId} 未返回有效端口`);
-            await zlmApi.closeRtpServer(rtpStreamId);
-            continue;
-          }
-          
-          // 步骤2：发送INVITE
-          const result = await api.startStreamWithConfig(device.deviceId, {
-            mediaServerIp: serverSettings.mediaServerIp,
-            mediaServerPort: actualPort,
-            useTcp: false
-          });
-          
-          if (result.success) {
-            if (result.alreadyStreaming) {
-              // 设备已在推流，关闭多余的RTP端口
-              await zlmApi.closeRtpServer(rtpStreamId);
-            }
-            successCount++;
-          } else {
-            await zlmApi.closeRtpServer(rtpStreamId);
-          }
-        } catch (err) {
-          // 异常时关闭已开启的RTP端口，避免泄漏
-          await zlmApi.closeRtpServer(rtpStreamId).catch(() => {});
-          console.warn(`设备 ${device.deviceId} 推流失败:`, err);
+      // 分批并发执行，每批 BATCH_SIZE 个设备同时推流
+      for (let i = 0; i < onlineDevices.length; i += BATCH_SIZE) {
+        const batch = onlineDevices.slice(i, i + BATCH_SIZE);
+        const results = await Promise.allSettled(batch.map(streamOneDevice));
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) successCount++;
         }
       }
       showMessage(`批量推流完成: ${successCount}/${onlineDevices.length} 成功`, 'success');
@@ -299,19 +320,19 @@ function App() {
 
       {/* 标签页导航 */}
       <div className="tab-nav">
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'services' ? 'active' : ''}`}
           onClick={() => setActiveTab('services')}
         >
           🚀 服务控制
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'devices' ? 'active' : ''}`}
           onClick={() => setActiveTab('devices')}
         >
           📹 设备管理
         </button>
-        <button 
+        <button
           className={`tab-btn ${activeTab === 'media' ? 'active' : ''}`}
           onClick={() => setActiveTab('media')}
         >
@@ -319,10 +340,14 @@ function App() {
         </button>
       </div>
 
-      {/* 提示消息 */}
-      {message && (
-        <div className={`message ${message.type}`}>
-          {message.text}
+      {/* 提示消息队列 */}
+      {messages.length > 0 && (
+        <div className="message-stack">
+          {messages.map(msg => (
+            <div key={msg.id} className={`message ${msg.type}`}>
+              {msg.text}
+            </div>
+          ))}
         </div>
       )}
 
@@ -334,7 +359,7 @@ function App() {
               {connected ? '暂无设备' : '点击刷新按钮连接服务器'}
             </div>
           )}
-          
+
           {devices.map(device => (
             <DeviceCard
               key={device.deviceId}

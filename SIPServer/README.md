@@ -410,6 +410,44 @@ java -jar target/gb28181-sip-server-1.0.0.jar
 - 启用缓存机制
 - 使用异步处理
 
+#### 操作系统 UDP 缓冲区调优
+
+当接入设备超过 500 台时，大量并发心跳可能导致 OS 层面 UDP 丢包。建议按如下方式调大系统 UDP 缓冲区：
+
+**Linux**
+```bash
+# 查看当前设置
+sysctl net.core.rmem_max
+sysctl net.core.wmem_max
+
+# 临时调整（重启后失效）
+sudo sysctl -w net.core.rmem_max=4194304   # 接收缓冲区 4MB
+sudo sysctl -w net.core.wmem_max=4194304   # 发送缓冲区 4MB
+
+# 永久生效：编辑 /etc/sysctl.conf 追加
+net.core.rmem_max=4194304
+net.core.wmem_max=4194304
+# 然后执行 sudo sysctl -p
+```
+
+**Windows**
+```
+暂无系统级 UDP Buffer 调整需求，Netty 已配置 1MB SO_RCVBUF/SO_SNDBUF。
+若有百万级并发需求，建议部署于 Linux 系统。
+```
+
+### SIP 字符集配置
+
+GB28181-2016 标准默认字符集为 GB2312。如果接入的老旧设备（部分海康/大华旧版固件）中文字段出现乱码，可在 `application.yml` 中修改：
+
+```yaml
+gb28181:
+  sip:
+    sip-charset: GBK   # 兼容 GB2312 编码，默认值为 UTF-8
+```
+
+也可以通过环境变量设置：`GB28181_SIP_CHARSET=GBK`
+
 ## 许可证
 
 本项目采用MIT许可证，详见LICENSE文件。

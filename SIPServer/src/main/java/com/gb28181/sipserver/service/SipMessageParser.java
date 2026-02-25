@@ -4,7 +4,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.BufferedReader;
 import java.io.StringReader;
 import java.util.HashMap;
@@ -35,57 +41,65 @@ public class SipMessageParser {
      */
     public Map<String, String> parseSipMessage(String message) {
         Map<String, String> result = new HashMap<>();
-        
+
         if (StringUtils.isEmpty(message)) {
             return result;
         }
 
-    try (BufferedReader reader = new BufferedReader(new StringReader(message))) {
-            
+        StringBuilder bodyBuilder = new StringBuilder();
+
+        try (BufferedReader reader = new BufferedReader(new StringReader(message))) {
+
             String line;
             int lineCount = 0;
             boolean isMessageBody = false;
-            
+
             while ((line = reader.readLine()) != null) {
-        line = line.trim();
+                String trimmed = line.trim();
                 lineCount++;
-                
+
                 // 空行表示消息头结束，消息体开始
-        if (StringUtils.isEmpty(line)) {
+                if (StringUtils.isEmpty(trimmed)) {
                     isMessageBody = true;
                     continue;
                 }
-                
-                // 解析消息体
+
+                // 收集消息体行（保留原始行以保持XML结构完整）
                 if (isMessageBody) {
-                    parseMessageBody(line, result);
+                    bodyBuilder.append(line).append("\n");
                     continue;
                 }
-                
+
                 // 解析第一行（请求行或状态行）
                 if (lineCount == 1) {
-                    parseFirstLine(line, result);
+                    parseFirstLine(trimmed, result);
                     continue;
                 }
-                
+
                 // 解析消息头
-                parseHeader(line, result);
+                parseHeader(trimmed, result);
             }
-            
+
         } catch (Exception e) {
             logger.error("解析SIP消息失败: {}", e.getMessage(), e);
         }
-        
+
+        // 使用DOM解析完整的XML消息体
+        String bodyContent = bodyBuilder.toString().trim();
+        if (StringUtils.isNotEmpty(bodyContent)) {
+            parseMessageBodyXml(bodyContent, result);
+        }
+
         // 处理设备ID的特殊情况
         processDeviceId(result);
-        
+
         return result;
     }
 
     /**
      * 解析第一行（请求行或状态行）
      * 
-     * @param line 第一行内容
+     * @param line   第一行内容
      * @param result 解析结果
      */
     private void parseFirstLine(String line, Map<String, String> result) {
@@ -113,30 +127,30 @@ public class SipMessageParser {
     /**
      * 解析消息头
      * 
-     * @param line 消息头行
+     * @param line   消息头行
      * @param result 解析结果
      */
     private void parseHeader(String line, Map<String, String> result) {
         if (!line.contains(":")) {
             return;
         }
-        
+
         // 防御性检查：排除误入的SIP请求行/状态行
         if (line.startsWith("SIP/2.0") || line.endsWith("SIP/2.0")) {
             return;
         }
-        
+
         // 兼容 "Header: value" 和 "Header:value" 两种格式
         String[] parts = line.split(":\\s*", 2);
         if (parts.length != 2) {
             return;
         }
-        
+
         String headerName = parts[0].trim();
         String headerValue = parts[1].trim();
-        
+
         result.put(headerName, headerValue);
-        
+
         // 特殊处理某些头部
         switch (headerName) {
             case "From":
@@ -161,7 +175,7 @@ public class SipMessageParser {
      * 解析From头部
      * 
      * @param fromValue From头部值
-     * @param result 解析结果
+     * @param result    解析结果
      */
     private void parseFromHeader(String fromValue, Map<String, String> result) {
         if ("REQUEST".equals(result.get("messageType"))) {
@@ -186,7 +200,7 @@ public class SipMessageParser {
      * BYE响应的特殊处理会在后续的postProcessResponse中完成。
      * 
      * @param toValue To头部值
-     * @param result 解析结果
+     * @param result  解析结果
      */
     private void parseToHeader(String toValue, Map<String, String> result) {
         if ("RESPONSE".equals(result.get("messageType"))) {
@@ -195,7 +209,7 @@ public class SipMessageParser {
                 String[] parts = toValue.split("\\s+");
                 String deviceId = parts[0].replaceAll("\"", "");
                 result.put("deviceId", deviceId);
-                
+
                 // 尝试解析设备本地IP和端口
                 if (parts.length > 1) {
                     String deviceLocalInfo = parts[1].split(";")[0];
@@ -210,7 +224,7 @@ public class SipMessageParser {
                         }
                     }
                 }
-                
+
                 // 如果上面的解析方式失败，尝试另一种格式: <sip:deviceId@ip:port>
                 if (!result.containsKey("deviceLocalIp") && toValue.contains("<sip:")) {
                     String sipUri = toValue;
@@ -247,7 +261,7 @@ public class SipMessageParser {
      * 解析Contact头部
      * 
      * @param contactValue Contact头部值
-     * @param result 解析结果
+     * @param result       解析结果
      */
     private void parseContactHeader(String contactValue, Map<String, String> result) {
         try {
@@ -267,12 +281,12 @@ public class SipMessageParser {
      * 解析Via头部
      * 
      * @param viaValue Via头部值
-     * @param result 解析结果
+     * @param result   解析结果
      */
     private void parseViaHeader(String viaValue, Map<String, String> result) {
         // Via头部包含网络路径信息，通常在响应时需要原样返回
         result.put("viaProtocol", "UDP"); // 默认UDP
-        
+
         try {
             String[] parts = viaValue.split("\\s+");
             if (parts.length > 1) {
@@ -292,16 +306,16 @@ public class SipMessageParser {
      * 解析Authorization头部
      * 
      * @param authValue Authorization头部值
-     * @param result 解析结果
+     * @param result    解析结果
      */
     private void parseAuthorizationHeader(String authValue, Map<String, String> result) {
         if (!authValue.startsWith("Digest ")) {
             return;
         }
-        
+
         String digestInfo = authValue.substring("Digest ".length());
         String[] params = digestInfo.split(",");
-        
+
         for (String param : params) {
             String[] kv = param.trim().split("=", 2);
             if (kv.length == 2) {
@@ -313,41 +327,82 @@ public class SipMessageParser {
     }
 
     /**
-     * 解析消息体（支持标准XML解析）
-     * 
-     * @param line 消息体行
-     * @param result 解析结果
+     * 使用DOM解析完整的XML消息体
+     * 相比逐行正则匹配，DOM解析可以正确处理：
+     * - 标签跨行的情况
+     * - 带命名空间的标签
+     * - 带属性的标签
+     * - 嵌套结构
+     *
+     * @param xmlContent 完整的XML字符串
+     * @param result     解析结果
      */
-    private void parseMessageBody(String line, Map<String, String> result) {
-        // 用正则表达式提取XML标签内容，兼容属性、空格等场景
-        extractXmlTag(line, "CmdType", "CmdType", result);
-        extractXmlTag(line, "DeviceID", "bodyDeviceId", result);
-        extractXmlTag(line, "Status", "Status", result);
-        extractXmlTag(line, "Manufacturer", "Manufacturer", result);
-        extractXmlTag(line, "Model", "Model", result);
-        extractXmlTag(line, "Firmware", "Firmware", result);
-        extractXmlTag(line, "Result", "Result", result);
-        extractXmlTag(line, "SumNum", "SumNum", result);
+    private void parseMessageBodyXml(String xmlContent, Map<String, String> result) {
+        // 需要提取的标签名到结果Key的映射
+        String[][] tagMappings = {
+                { "CmdType", "CmdType" },
+                { "DeviceID", "bodyDeviceId" },
+                { "Status", "Status" },
+                { "Manufacturer", "Manufacturer" },
+                { "Model", "Model" },
+                { "Firmware", "Firmware" },
+                { "Result", "Result" },
+                { "SumNum", "SumNum" }
+        };
+
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            // 安全配置：禁用外部实体解析，防止XXE攻击
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(new InputSource(new StringReader(xmlContent)));
+
+            Element root = doc.getDocumentElement();
+            for (String[] mapping : tagMappings) {
+                String tagName = mapping[0];
+                String resultKey = mapping[1];
+                NodeList nodes = root.getElementsByTagName(tagName);
+                if (nodes.getLength() > 0) {
+                    String textContent = nodes.item(0).getTextContent();
+                    if (StringUtils.isNotEmpty(textContent)) {
+                        result.put(resultKey, textContent.trim());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // DOM解析失败时，回退为正则提取（兼容非标准XML片段）
+            logger.debug("DOM解析XML消息体失败，回退为正则提取: {}", e.getMessage());
+            parseMessageBodyRegexFallback(xmlContent, result);
+        }
     }
 
     /**
-     * 从XML行中提取指定标签的内容
-     * 支持带属性的标签，如 <CmdType attr="val">Keepalive</CmdType>
+     * 正则回退方案：当XML格式不合法（如缺少根节点）时使用
      */
-    private void extractXmlTag(String line, String tagName, String resultKey, Map<String, String> result) {
-        if (!line.contains("<" + tagName)) {
-            return;
-        }
-        try {
-            // 匹配 <tagName...>content</tagName>
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
-                "<" + tagName + "[^>]*>([^<]*)</" + tagName + ">");
-            java.util.regex.Matcher matcher = pattern.matcher(line);
-            if (matcher.find()) {
-                result.put(resultKey, matcher.group(1).trim());
+    private void parseMessageBodyRegexFallback(String content, Map<String, String> result) {
+        String[][] tagMappings = {
+                { "CmdType", "CmdType" },
+                { "DeviceID", "bodyDeviceId" },
+                { "Status", "Status" },
+                { "Manufacturer", "Manufacturer" },
+                { "Model", "Model" },
+                { "Firmware", "Firmware" },
+                { "Result", "Result" },
+                { "SumNum", "SumNum" }
+        };
+        for (String[] mapping : tagMappings) {
+            try {
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                        "<" + mapping[0] + "[^>]*>([^<]*)</" + mapping[0] + ">");
+                java.util.regex.Matcher matcher = pattern.matcher(content);
+                if (matcher.find()) {
+                    result.put(mapping[1], matcher.group(1).trim());
+                }
+            } catch (Exception e) {
+                logger.warn("正则提取XML标签 {} 失败", mapping[0]);
             }
-        } catch (Exception e) {
-            logger.warn("解析XML标签 {} 失败: {}", tagName, line);
         }
     }
 
@@ -365,7 +420,7 @@ public class SipMessageParser {
                 result.put("deviceId", parts[1]);
             }
         }
-        
+
         // 如果消息体中有设备ID，优先使用消息体中的
         String bodyDeviceId = result.get("bodyDeviceId");
         if (StringUtils.isNotEmpty(bodyDeviceId)) {

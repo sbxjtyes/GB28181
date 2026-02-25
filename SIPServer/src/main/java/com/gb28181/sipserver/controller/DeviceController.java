@@ -13,7 +13,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.HashMap;
 import java.util.List;
@@ -50,10 +55,10 @@ public class DeviceController {
         logger.debug("获取所有设备列表");
 
         Map<String, Object> response = new HashMap<>();
-        
+
         try {
             List<DeviceInfo> devices = deviceService.getAllDevices();
-            
+
             response.put("success", true);
             response.put("message", "获取设备列表成功");
             response.put("total", devices.size());
@@ -63,6 +68,49 @@ public class DeviceController {
 
         } catch (Exception e) {
             logger.error("获取设备列表异常: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "服务器内部错误: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 分页获取设备列表（适用于设备数量较大的场景）
+     * 
+     * @param page   页码（从0开始）
+     * @param size   每页数量（默认50，最大200）
+     * @param online 可选，筛选在线状态（true/false）
+     * @return 分页设备列表
+     */
+    @GetMapping("/page")
+    public ResponseEntity<Map<String, Object>> getDevicesPage(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) Boolean online) {
+        logger.debug("分页获取设备列表: page={}, size={}, online={}", page, size, online);
+
+        Map<String, Object> response = new HashMap<>();
+        try {
+            // 限制每页最大200条，防止恶意请求
+            size = Math.min(size, 200);
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastHeartbeatTime"));
+
+            Page<DeviceInfo> devicePage;
+            if (online != null) {
+                devicePage = deviceService.getDevicesByOnlineStatus(online, pageable);
+            } else {
+                devicePage = deviceService.getDevicesPage(pageable);
+            }
+
+            response.put("success", true);
+            response.put("devices", devicePage.getContent());
+            response.put("total", devicePage.getTotalElements());
+            response.put("page", devicePage.getNumber());
+            response.put("size", devicePage.getSize());
+            response.put("totalPages", devicePage.getTotalPages());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("分页获取设备列表异常: {}", e.getMessage(), e);
             response.put("success", false);
             response.put("message", "服务器内部错误: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
@@ -98,8 +146,6 @@ public class DeviceController {
         }
     }
 
-
-
     /**
      * 获取指定设备详情
      * 
@@ -111,10 +157,10 @@ public class DeviceController {
         logger.debug("获取设备详情: deviceId={}", deviceId);
 
         Map<String, Object> response = new HashMap<>();
-        
+
         try {
             DeviceInfo device = deviceService.getDeviceInfo(deviceId);
-            
+
             if (device == null) {
                 response.put("success", false);
                 response.put("message", "设备不存在: " + deviceId);
@@ -154,8 +200,8 @@ public class DeviceController {
             statistics.put("totalDevices", stats.getTotalCount());
             statistics.put("onlineDevices", stats.getOnlineCount());
             statistics.put("offlineDevices", stats.getOfflineCount());
-            statistics.put("onlineRate", stats.getTotalCount() > 0 ? 
-                (double) stats.getOnlineCount() / stats.getTotalCount() * 100 : 0);
+            statistics.put("onlineRate",
+                    stats.getTotalCount() > 0 ? (double) stats.getOnlineCount() / stats.getTotalCount() * 100 : 0);
 
             response.put("success", true);
             response.put("message", "获取统计信息成功");
@@ -182,17 +228,15 @@ public class DeviceController {
         logger.info("删除设备: deviceId={}", deviceId);
 
         Map<String, Object> response = new HashMap<>();
-        
+
         try {
             DeviceInfo device = deviceService.getDeviceInfo(deviceId);
-            
+
             if (device == null) {
                 response.put("success", false);
                 response.put("message", "设备不存在: " + deviceId);
                 return ResponseEntity.badRequest().body(response);
             }
-
-
 
             deviceService.removeDeviceInfo(deviceId);
 
@@ -314,7 +358,7 @@ public class DeviceController {
             int successCount = deviceService.batchForceDeviceReregister(request.getDeviceIds());
 
             response.put("success", true);
-            response.put("message", String.format("批量强制重新注册完成，成功处理 %d/%d 个设备", 
+            response.put("message", String.format("批量强制重新注册完成，成功处理 %d/%d 个设备",
                     successCount, request.getDeviceIds().size()));
             response.put("totalCount", request.getDeviceIds().size());
             response.put("successCount", successCount);

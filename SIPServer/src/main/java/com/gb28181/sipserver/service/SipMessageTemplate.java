@@ -18,238 +18,234 @@ import org.springframework.stereotype.Service;
 @Service
 public class SipMessageTemplate {
 
-    private static final String CRLF = "\r\n";
+        private static final String CRLF = "\r\n";
 
-    /**
-     * 401未授权响应模板
-     */
-    private static final String TEMPLATE_401_UNAUTHORIZED = 
-            "SIP/2.0 401 Unauthorized" + CRLF +
-            "CSeq: {CSeq}" + CRLF +
-            "Call-ID: {Call-ID}" + CRLF +
-            "From: {From}" + CRLF +
-            "To: {To}" + CRLF +
-            "Via: {Via}" + CRLF +
-            "WWW-Authenticate: Digest realm=\"{realm}\",nonce=\"{nonce}\"" + CRLF +
-            "Content-Length: 0" + CRLF +
-            CRLF;
+        /**
+         * 401未授权响应模板
+         */
+        private static final String TEMPLATE_401_UNAUTHORIZED = "SIP/2.0 401 Unauthorized" + CRLF +
+                        "CSeq: {CSeq}" + CRLF +
+                        "Call-ID: {Call-ID}" + CRLF +
+                        "From: {From}" + CRLF +
+                        "To: {To}" + CRLF +
+                        "Via: {Via}" + CRLF +
+                        "WWW-Authenticate: Digest realm=\"{realm}\",nonce=\"{nonce}\"" + CRLF +
+                        "Content-Length: 0" + CRLF +
+                        CRLF;
 
-    /**
-     * 200 OK注册成功响应模板
-     */
-    private static final String TEMPLATE_200_OK_REGISTER = 
-            "SIP/2.0 200 OK" + CRLF +
-            "CSeq: {CSeq}" + CRLF +
-            "Call-ID: {Call-ID}" + CRLF +
-            "From: {From}" + CRLF +
-            "To: {To}" + CRLF +
-            "Via: {Via}" + CRLF +
-            "Expires: {Expires}" + CRLF +
-            "Date: {Date}" + CRLF +
-            "Content-Length: 0" + CRLF +
-            CRLF;
+        /**
+         * 200 OK注册成功响应模板
+         */
+        private static final String TEMPLATE_200_OK_REGISTER = "SIP/2.0 200 OK" + CRLF +
+                        "CSeq: {CSeq}" + CRLF +
+                        "Call-ID: {Call-ID}" + CRLF +
+                        "From: {From}" + CRLF +
+                        "To: {To}" + CRLF +
+                        "Via: {Via}" + CRLF +
+                        "Expires: {Expires}" + CRLF +
+                        "Date: {Date}" + CRLF +
+                        "Content-Length: 0" + CRLF +
+                        CRLF;
 
-    /**
-     * 心跳保活200 OK响应模板
-     */
-    private static final String TEMPLATE_200_OK_KEEPALIVE = 
-            "SIP/2.0 200 OK" + CRLF +
-            "CSeq: {CSeq}" + CRLF +
-            "Call-ID: {Call-ID}" + CRLF +
-            "From: {From}" + CRLF +
-            "To: {To}" + CRLF +
-            "Via: {Via}" + CRLF +
-            "Content-Length: 0" + CRLF +
-            CRLF;
+        /**
+         * 心跳保活200 OK响应模板
+         */
+        private static final String TEMPLATE_200_OK_KEEPALIVE = "SIP/2.0 200 OK" + CRLF +
+                        "CSeq: {CSeq}" + CRLF +
+                        "Call-ID: {Call-ID}" + CRLF +
+                        "From: {From}" + CRLF +
+                        "To: {To}" + CRLF +
+                        "Via: {Via}" + CRLF +
+                        "Content-Length: 0" + CRLF +
+                        CRLF;
 
-    /**
-     * INVITE推流请求模板
-     */
-    private static final String TEMPLATE_INVITE = 
-            "INVITE sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort};transport=udp SIP/2.0" + CRLF +
-            "Call-ID: {Call-ID}" + CRLF +
-            "CSeq: 1 INVITE" + CRLF +
-            "From: <sip:{serverId}@{serverIp}:{serverPort}>;tag=live" + CRLF +
-            "To: \"{deviceId}\" <sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort}>" + CRLF +
-            "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
-            "Max-Forwards: 70" + CRLF +
-            "Content-Type: Application/sdp" + CRLF +
-            "Contact: <sip:{serverId}@{serverIp}:{serverPort}>" + CRLF +
-            "Supported: 100rel" + CRLF +
-            "Subject: {deviceId}:010000{ssrc},{serverId}:0" + CRLF +
-            "User-Agent: GB28181-SIP-Server" + CRLF +
-            "Content-Length: {Content-Length}" + CRLF +
-            CRLF;
+        /**
+         * INVITE推流请求模板
+         */
+        private static final String TEMPLATE_INVITE = "INVITE sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort};transport=udp SIP/2.0"
+                        + CRLF +
+                        "Call-ID: {Call-ID}" + CRLF +
+                        "CSeq: 1 INVITE" + CRLF +
+                        "From: <sip:{serverId}@{serverIp}:{serverPort}>;tag=live" + CRLF +
+                        "To: \"{deviceId}\" <sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort}>" + CRLF +
+                        "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
+                        "Max-Forwards: 70" + CRLF +
+                        "Content-Type: Application/sdp" + CRLF +
+                        "Contact: <sip:{serverId}@{serverIp}:{serverPort}>" + CRLF +
+                        "Supported: 100rel" + CRLF +
+                        "Subject: {deviceId}:010000{ssrc},{serverId}:0" + CRLF +
+                        "User-Agent: GB28181-SIP-Server" + CRLF +
+                        "Content-Length: {Content-Length}" + CRLF +
+                        CRLF;
 
-    /**
-     * SDP媒体描述模板（TCP）
-     */
-    private static final String TEMPLATE_SDP_TCP =
-            "v=0" + CRLF +
-            "o={deviceId} 0 0 IN IP4 {mediaServerIp}" + CRLF +
-            "s=Play" + CRLF +
-            "c=IN IP4 {mediaServerIp}" + CRLF +
-            "t=0 0" + CRLF +
-            "m=video {mediaServerPort} TCP/RTP/AVP 96 98 97" + CRLF +
-            "a=recvonly" + CRLF +
-            "a=setup:passive" + CRLF +
-            "a=connection:new" + CRLF +
-            "a=rtpmap:96 PS/90000" + CRLF +
-            "a=rtpmap:98 H264/90000" + CRLF +
-            "a=rtpmap:97 MPEG4/90000" + CRLF +
-            "y=010000{ssrc}" + CRLF +
-            "f=" + CRLF;
+        /**
+         * SDP媒体描述模板（TCP）
+         */
+        private static final String TEMPLATE_SDP_TCP = "v=0" + CRLF +
+                        "o={deviceId} 0 0 IN IP4 {mediaServerIp}" + CRLF +
+                        "s=Play" + CRLF +
+                        "c=IN IP4 {mediaServerIp}" + CRLF +
+                        "t=0 0" + CRLF +
+                        "m=video {mediaServerPort} TCP/RTP/AVP 96 98 97" + CRLF +
+                        "a=recvonly" + CRLF +
+                        "a=setup:passive" + CRLF +
+                        "a=connection:new" + CRLF +
+                        "a=rtpmap:96 PS/90000" + CRLF +
+                        "a=rtpmap:98 H264/90000" + CRLF +
+                        "a=rtpmap:97 MPEG4/90000" + CRLF +
+                        "y=010000{ssrc}" + CRLF +
+                        "f=" + CRLF;
 
-    /**
-     * SDP媒体描述模板（UDP）
-     */
-    private static final String TEMPLATE_SDP_UDP =
-            "v=0" + CRLF +
-            "o={deviceId} 0 0 IN IP4 {mediaServerIp}" + CRLF +
-            "s=Play" + CRLF +
-            "c=IN IP4 {mediaServerIp}" + CRLF +
-            "t=0 0" + CRLF +
-            "m=video {mediaServerPort} RTP/AVP 96 98 97" + CRLF +
-            "a=recvonly" + CRLF +
-            "a=rtpmap:96 PS/90000" + CRLF +
-            "a=rtpmap:98 H264/90000" + CRLF +
-            "a=rtpmap:97 MPEG4/90000" + CRLF +
-            "y=010000{ssrc}" + CRLF +
-            "f=" + CRLF;
+        /**
+         * SDP媒体描述模板（UDP）
+         */
+        private static final String TEMPLATE_SDP_UDP = "v=0" + CRLF +
+                        "o={deviceId} 0 0 IN IP4 {mediaServerIp}" + CRLF +
+                        "s=Play" + CRLF +
+                        "c=IN IP4 {mediaServerIp}" + CRLF +
+                        "t=0 0" + CRLF +
+                        "m=video {mediaServerPort} RTP/AVP 96 98 97" + CRLF +
+                        "a=recvonly" + CRLF +
+                        "a=rtpmap:96 PS/90000" + CRLF +
+                        "a=rtpmap:98 H264/90000" + CRLF +
+                        "a=rtpmap:97 MPEG4/90000" + CRLF +
+                        "y=010000{ssrc}" + CRLF +
+                        "f=" + CRLF;
 
-    /**
-     * ACK确认消息模板
-     */
-    private static final String TEMPLATE_ACK = 
-            "ACK sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort} SIP/2.0" + CRLF +
-            "Call-ID: {Call-ID}" + CRLF +
-            "CSeq: 1 ACK" + CRLF +
-            "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
-            "From: {From}" + CRLF +
-            "To: {To}" + CRLF +
-            "Max-Forwards: 70" + CRLF +
-            "Content-Length: 0" + CRLF +
-            CRLF;
+        /**
+         * ACK确认消息模板
+         */
+        private static final String TEMPLATE_ACK = "ACK sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort} SIP/2.0" + CRLF
+                        +
+                        "Call-ID: {Call-ID}" + CRLF +
+                        "CSeq: 1 ACK" + CRLF +
+                        "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
+                        "From: {From}" + CRLF +
+                        "To: {To}" + CRLF +
+                        "Max-Forwards: 70" + CRLF +
+                        "Content-Length: 0" + CRLF +
+                        CRLF;
 
-    /**
-     * BYE断流请求模板
-     */
-    private static final String TEMPLATE_BYE = 
-            "BYE sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort};transport=udp SIP/2.0" + CRLF +
-            "Call-ID: {Call-ID}" + CRLF +
-            "CSeq: 6 BYE" + CRLF +
-            "From: {From}" + CRLF +
-            "To: {To}" + CRLF +
-            "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
-            "Contact: <sip:{serverId}@{serverIp}:{serverPort}>" + CRLF +
-            "Max-Forwards: 70" + CRLF +
-            "Content-Length: 0" + CRLF +
-            CRLF;
+        /**
+         * BYE断流请求模板
+         */
+        private static final String TEMPLATE_BYE = "BYE sip:{deviceId}@{deviceLocalIp}:{deviceLocalPort};transport=udp SIP/2.0"
+                        + CRLF +
+                        "Call-ID: {Call-ID}" + CRLF +
+                        "CSeq: 2 BYE" + CRLF +
+                        "From: {From}" + CRLF +
+                        "To: {To}" + CRLF +
+                        "Via: SIP/2.0/UDP {serverIp}:{serverPort};branch={branchId}" + CRLF +
+                        "Contact: <sip:{serverId}@{serverIp}:{serverPort}>" + CRLF +
+                        "Max-Forwards: 70" + CRLF +
+                        "Content-Length: 0" + CRLF +
+                        CRLF;
 
-    /**
-     * 生成401未授权响应
-     */
-    public String build401Unauthorized(String cseq, String callId, String from, String to, String via, 
-                                     String realm, String nonce) {
-        return TEMPLATE_401_UNAUTHORIZED
-                .replace("{CSeq}", cseq)
-                .replace("{Call-ID}", callId)
-                .replace("{From}", from)
-                .replace("{To}", to)
-                .replace("{Via}", via)
-                .replace("{realm}", realm)
-                .replace("{nonce}", nonce);
-    }
+        /**
+         * 生成401未授权响应
+         */
+        public String build401Unauthorized(String cseq, String callId, String from, String to, String via,
+                        String realm, String nonce) {
+                return TEMPLATE_401_UNAUTHORIZED
+                                .replace("{CSeq}", cseq)
+                                .replace("{Call-ID}", callId)
+                                .replace("{From}", from)
+                                .replace("{To}", to)
+                                .replace("{Via}", via)
+                                .replace("{realm}", realm)
+                                .replace("{nonce}", nonce);
+        }
 
-    /**
-     * 生成200 OK注册成功响应
-     */
-    public String build200OkRegister(String cseq, String callId, String from, String to, 
-                                   String via, String expires) {
-        return TEMPLATE_200_OK_REGISTER
-                .replace("{CSeq}", cseq)
-                .replace("{Call-ID}", callId)
-                .replace("{From}", from)
-                .replace("{To}", to)
-                .replace("{Via}", via)
-                .replace("{Expires}", expires)
-                .replace("{Date}", SipUtils.getGMT());
-    }
+        /**
+         * 生成200 OK注册成功响应
+         */
+        public String build200OkRegister(String cseq, String callId, String from, String to,
+                        String via, String expires) {
+                return TEMPLATE_200_OK_REGISTER
+                                .replace("{CSeq}", cseq)
+                                .replace("{Call-ID}", callId)
+                                .replace("{From}", from)
+                                .replace("{To}", to)
+                                .replace("{Via}", via)
+                                .replace("{Expires}", expires)
+                                .replace("{Date}", SipUtils.getGMT());
+        }
 
-    /**
-     * 生成心跳保活200 OK响应
-     */
-    public String build200OkKeepalive(String cseq, String callId, String from, String to, String via) {
-        return TEMPLATE_200_OK_KEEPALIVE
-                .replace("{CSeq}", cseq)
-                .replace("{Call-ID}", callId)
-                .replace("{From}", from)
-                .replace("{To}", to)
-                .replace("{Via}", via);
-    }
+        /**
+         * 生成心跳保活200 OK响应
+         */
+        public String build200OkKeepalive(String cseq, String callId, String from, String to, String via) {
+                return TEMPLATE_200_OK_KEEPALIVE
+                                .replace("{CSeq}", cseq)
+                                .replace("{Call-ID}", callId)
+                                .replace("{From}", from)
+                                .replace("{To}", to)
+                                .replace("{Via}", via);
+        }
 
-    /**
-     * 生成INVITE推流请求
-     */
-    public String buildInviteRequest(String deviceId, String deviceLocalIp, String deviceLocalPort,
-                                   String callId, String serverId, String serverIp, String serverPort,
-                                   String ssrc, String mediaServerIp, String mediaServerPort, 
-                                   boolean useTcp) {
-        String sdpContent = useTcp ? TEMPLATE_SDP_TCP : TEMPLATE_SDP_UDP;
-        sdpContent = sdpContent
-                .replace("{deviceId}", deviceId)
-                .replace("{mediaServerIp}", mediaServerIp)
-                .replace("{mediaServerPort}", mediaServerPort)
-                .replace("{ssrc}", ssrc);
+        /**
+         * 生成INVITE推流请求
+         */
+        public String buildInviteRequest(String deviceId, String deviceLocalIp, String deviceLocalPort,
+                        String callId, String serverId, String serverIp, String serverPort,
+                        String ssrc, String mediaServerIp, String mediaServerPort,
+                        boolean useTcp) {
+                String sdpContent = useTcp ? TEMPLATE_SDP_TCP : TEMPLATE_SDP_UDP;
+                sdpContent = sdpContent
+                                .replace("{deviceId}", deviceId)
+                                .replace("{mediaServerIp}", mediaServerIp)
+                                .replace("{mediaServerPort}", mediaServerPort)
+                                .replace("{ssrc}", ssrc);
 
-        String inviteMessage = TEMPLATE_INVITE
-                .replace("{deviceId}", deviceId)
-                .replace("{deviceLocalIp}", deviceLocalIp)
-                .replace("{deviceLocalPort}", deviceLocalPort)
-                .replace("{Call-ID}", callId)
-                .replace("{serverId}", serverId)
-                .replace("{serverIp}", serverIp)
-                .replace("{serverPort}", serverPort)
-                .replace("{ssrc}", ssrc)
-                .replace("{branchId}", SipUtils.getBranchId())
-                .replace("{Content-Length}", String.valueOf(sdpContent.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));
+                String inviteMessage = TEMPLATE_INVITE
+                                .replace("{deviceId}", deviceId)
+                                .replace("{deviceLocalIp}", deviceLocalIp)
+                                .replace("{deviceLocalPort}", deviceLocalPort)
+                                .replace("{Call-ID}", callId)
+                                .replace("{serverId}", serverId)
+                                .replace("{serverIp}", serverIp)
+                                .replace("{serverPort}", serverPort)
+                                .replace("{ssrc}", ssrc)
+                                .replace("{branchId}", SipUtils.getBranchId())
+                                .replace("{Content-Length}", String.valueOf(
+                                                sdpContent.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));
 
-        return inviteMessage + sdpContent;
-    }
+                return inviteMessage + sdpContent;
+        }
 
-    /**
-     * 生成ACK确认消息
-     */
-    public String buildAckMessage(String deviceId, String deviceLocalIp, String deviceLocalPort,
-                                String callId, String serverIp, String serverPort, String from, String to) {
-        return TEMPLATE_ACK
-                .replace("{deviceId}", deviceId)
-                .replace("{deviceLocalIp}", deviceLocalIp)
-                .replace("{deviceLocalPort}", deviceLocalPort)
-                .replace("{Call-ID}", callId)
-                .replace("{serverIp}", serverIp)
-                .replace("{serverPort}", serverPort)
-                .replace("{branchId}", SipUtils.getBranchId())
-                .replace("{From}", from)
-                .replace("{To}", to);
-    }
+        /**
+         * 生成ACK确认消息
+         */
+        public String buildAckMessage(String deviceId, String deviceLocalIp, String deviceLocalPort,
+                        String callId, String serverIp, String serverPort, String from, String to) {
+                return TEMPLATE_ACK
+                                .replace("{deviceId}", deviceId)
+                                .replace("{deviceLocalIp}", deviceLocalIp)
+                                .replace("{deviceLocalPort}", deviceLocalPort)
+                                .replace("{Call-ID}", callId)
+                                .replace("{serverIp}", serverIp)
+                                .replace("{serverPort}", serverPort)
+                                .replace("{branchId}", SipUtils.getBranchId())
+                                .replace("{From}", from)
+                                .replace("{To}", to);
+        }
 
-    /**
-     * 生成BYE断流请求
-     */
-    public String buildByeRequest(String deviceId, String deviceLocalIp, String deviceLocalPort,
-                                String callId, String from, String to, String serverId, 
-                                String serverIp, String serverPort) {
-        return TEMPLATE_BYE
-                .replace("{deviceId}", deviceId)
-                .replace("{deviceLocalIp}", deviceLocalIp)
-                .replace("{deviceLocalPort}", deviceLocalPort)
-                .replace("{Call-ID}", callId)
-                .replace("{From}", from)
-                .replace("{To}", to)
-                .replace("{serverId}", serverId)
-                .replace("{serverIp}", serverIp)
-                .replace("{serverPort}", serverPort)
-                .replace("{branchId}", SipUtils.getBranchId());
-    }
+        /**
+         * 生成BYE断流请求
+         */
+        public String buildByeRequest(String deviceId, String deviceLocalIp, String deviceLocalPort,
+                        String callId, String from, String to, String serverId,
+                        String serverIp, String serverPort) {
+                return TEMPLATE_BYE
+                                .replace("{deviceId}", deviceId)
+                                .replace("{deviceLocalIp}", deviceLocalIp)
+                                .replace("{deviceLocalPort}", deviceLocalPort)
+                                .replace("{Call-ID}", callId)
+                                .replace("{From}", from)
+                                .replace("{To}", to)
+                                .replace("{serverId}", serverId)
+                                .replace("{serverIp}", serverIp)
+                                .replace("{serverPort}", serverPort)
+                                .replace("{branchId}", SipUtils.getBranchId());
+        }
 }

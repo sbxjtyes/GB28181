@@ -32,17 +32,26 @@ body {
   font-size: 16px;
 }
 
-/* 提示消息 */
-.message {
+/* 提示消息容器（支持多条叠显） */
+.message-stack {
   position: fixed;
   top: 80px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.message {
   padding: 12px 24px;
   border-radius: 8px;
   font-size: 14px;
-  z-index: 999;
   animation: slideDown 0.3s ease;
+  pointer-events: auto;
+  white-space: nowrap;
 }
 
 .message.success {
@@ -63,11 +72,11 @@ body {
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(-10px);
+    transform: translateY(-10px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 

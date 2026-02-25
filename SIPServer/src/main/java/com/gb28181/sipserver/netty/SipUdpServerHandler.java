@@ -74,7 +74,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
             InetSocketAddress sender = packet.sender();
             String senderIp = sender.getAddress().getHostAddress();
             int senderPort = sender.getPort();
-            String message = packet.content().toString(CharsetUtil.UTF_8);
+            String message = packet.content().toString(sipServerConfig.getCharset());
 
             // 将耗时的业务处理提交到线程池异步执行，立即释放 IO 线程
             sipMessageExecutor.execute(() -> {
@@ -93,9 +93,9 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
     /**
      * 处理 SIP 消息的核心逻辑（在线程池中异步执行）
      * 
-     * @param ctx Netty 通道上下文（线程安全，可跨线程使用）
-     * @param message SIP 消息原始文本
-     * @param senderIp 发送方 IP
+     * @param ctx        Netty 通道上下文（线程安全，可跨线程使用）
+     * @param message    SIP 消息原始文本
+     * @param senderIp   发送方 IP
      * @param senderPort 发送方端口
      */
     private void processMessage(ChannelHandlerContext ctx, String message, String senderIp, int senderPort) {
@@ -116,25 +116,25 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
     /**
      * 处理SIP请求消息
      */
-    private void handleRequest(ChannelHandlerContext ctx, Map<String, String> sipMessage, 
-                             String senderIp, int senderPort) {
+    private void handleRequest(ChannelHandlerContext ctx, Map<String, String> sipMessage,
+            String senderIp, int senderPort) {
         String method = sipMessage.get("method");
         String deviceId = sipMessage.get("deviceId");
-        
+
         if (method == null) {
             logger.warn("SIP请求缺少方法名, from={}:{}", senderIp, senderPort);
             return;
         }
-        
+
         switch (method) {
             case "REGISTER":
-                logger.info("← 收到SIP请求: method=REGISTER, deviceId={}, from={}:{}", 
-                    deviceId, senderIp, senderPort);
+                logger.info("← 收到SIP请求: method=REGISTER, deviceId={}, from={}:{}",
+                        deviceId, senderIp, senderPort);
                 handleRegisterRequest(ctx, sipMessage, senderIp, senderPort);
                 break;
             case "MESSAGE":
-                logger.debug("← 收到SIP请求: method=MESSAGE, deviceId={}, from={}:{}", 
-                    deviceId, senderIp, senderPort);
+                logger.debug("← 收到SIP请求: method=MESSAGE, deviceId={}, from={}:{}",
+                        deviceId, senderIp, senderPort);
                 handleMessageRequest(ctx, sipMessage, senderIp, senderPort);
                 break;
             default:
@@ -147,18 +147,18 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
      * 处理SIP响应消息
      * 使用CSeq头部中的方法名区分INVITE/BYE响应（符合RFC 3261）
      */
-    private void handleResponse(ChannelHandlerContext ctx, Map<String, String> sipMessage, 
-                              String senderIp, int senderPort) {
+    private void handleResponse(ChannelHandlerContext ctx, Map<String, String> sipMessage,
+            String senderIp, int senderPort) {
         String stateCode = sipMessage.get("stateCode");
         String cseq = sipMessage.get("CSeq");
-        
+
         // 记录SIP临时响应（100 Trying / 180 Ringing），正常推流流程中每次都会产生
         if ("100".equals(stateCode) || "180".equals(stateCode)) {
-            logger.debug("← 收到SIP临时响应: {} {}, CSeq={}, from={}:{}", 
-                stateCode, sipMessage.get("reasonPhrase"), cseq, senderIp, senderPort);
+            logger.debug("← 收到SIP临时响应: {} {}, CSeq={}, from={}:{}",
+                    stateCode, sipMessage.get("reasonPhrase"), cseq, senderIp, senderPort);
             return;
         }
-        
+
         if (StringUtils.isEmpty(cseq)) {
             return;
         }
@@ -173,7 +173,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
             // INVITE的错误响应（4xx/5xx/6xx）：记录日志并清理僵尸会话
             String deviceId = sipMessage.get("deviceId");
             logger.warn("收到INVITE错误响应: stateCode={}, deviceId={}, CSeq={}, from={}:{}",
-                stateCode, deviceId, cseq, senderIp, senderPort);
+                    stateCode, deviceId, cseq, senderIp, senderPort);
             if (StringUtils.isNotEmpty(deviceId)) {
                 deviceService.clearDeviceLiveInfo(deviceId);
             }
@@ -183,8 +183,8 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
     /**
      * 处理REGISTER注册请求
      */
-    private void handleRegisterRequest(ChannelHandlerContext ctx, Map<String, String> sipMessage, 
-                                     String senderIp, int senderPort) {
+    private void handleRegisterRequest(ChannelHandlerContext ctx, Map<String, String> sipMessage,
+            String senderIp, int senderPort) {
         String deviceId = sipMessage.get("deviceId");
         String callId = StringUtils.defaultString(sipMessage.get("Call-ID"));
         String from = StringUtils.defaultString(sipMessage.get("From"));
@@ -219,21 +219,21 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
         String uri = sipMessage.get("auth_uri");
         String response = sipMessage.get("auth_response");
 
-        if (SipUtils.verifyAuthResponse(username, realm, sipServerConfig.getDevicePassword(), 
-                                      nonce, "REGISTER", uri, response)) {
+        if (SipUtils.verifyAuthResponse(username, realm, sipServerConfig.getDevicePassword(),
+                nonce, "REGISTER", uri, response)) {
             // 认证成功，注册设备
             registerDevice(deviceId, sipMessage, senderIp, senderPort);
-            
+
             // 清除强制重新注册标记
             deviceService.handleDeviceRegistered(deviceId);
-            
+
             // 发送200 OK响应
             String cseq = StringUtils.defaultString(sipMessage.get("CSeq"));
             String expires = String.valueOf(sipServerConfig.getRegisterExpires());
             String okResponse = sipMessageTemplate.build200OkRegister(
                     cseq, callId, from, to, via, expires);
             sendResponse(ctx, okResponse, senderIp, senderPort);
-            
+
             // 使用高亮显示设备注册成功信息
             logger.info(ConsoleHighlight.safeRegisterSuccess(deviceId));
         } else {
@@ -244,11 +244,11 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
     /**
      * 处理MESSAGE心跳保活请求
      */
-    private void handleMessageRequest(ChannelHandlerContext ctx, Map<String, String> sipMessage, 
-                                    String senderIp, int senderPort) {
+    private void handleMessageRequest(ChannelHandlerContext ctx, Map<String, String> sipMessage,
+            String senderIp, int senderPort) {
         String deviceId = sipMessage.get("deviceId");
         String cmdType = sipMessage.get("CmdType");
-        
+
         if (StringUtils.isEmpty(deviceId)) {
             logger.warn("MESSAGE请求中缺少设备ID");
             return;
@@ -257,7 +257,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
         // 检查设备是否需要强制重新注册
         boolean needForceReregister = deviceService.isDeviceNeedForceReregister(deviceId);
         logger.debug("检查设备强制重注册状态: deviceId={}, needForceReregister={}", deviceId, needForceReregister);
-        
+
         if (needForceReregister) {
             // 强制设备重新注册：发送401未授权响应
             String callId = StringUtils.defaultString(sipMessage.get("Call-ID"));
@@ -269,11 +269,11 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
             String to = StringUtils.defaultString(sipMessage.get("To"));
             String via = StringUtils.defaultString(sipMessage.get("Via"));
             String nonce = SipUtils.generateNonce(callId, deviceId);
-            
+
             String response = sipMessageTemplate.build401Unauthorized(
                     cseq, callId, from, to, via, sipServerConfig.getSipDomain(), nonce);
             sendResponse(ctx, response, senderIp, senderPort);
-            
+
             logger.warn("设备心跳被拒绝，等待重新注册: deviceId={}, forceReregister=true", deviceId);
             return;
         }
@@ -281,18 +281,18 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
         if ("Keepalive".equals(cmdType)) {
             // 更新设备心跳
             deviceService.updateDeviceHeartbeat(deviceId);
-            
+
             // 发送200 OK响应
             String cseq = StringUtils.defaultString(sipMessage.get("CSeq"));
             String callId = StringUtils.defaultString(sipMessage.get("Call-ID"));
             String from = StringUtils.defaultString(sipMessage.get("From"));
             String to = StringUtils.defaultString(sipMessage.get("To"));
             String via = StringUtils.defaultString(sipMessage.get("Via"));
-            
+
             String response = sipMessageTemplate.build200OkKeepalive(
                     cseq, callId, from, to, via);
             sendResponse(ctx, response, senderIp, senderPort);
-            
+
             logger.debug("处理设备心跳: {}", deviceId);
         }
     }
@@ -303,10 +303,10 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
      * 收到设备的200 OK响应后，需要发送ACK确认消息，设备收到ACK后才会开始推流。
      */
     private void handleInviteOkResponse(ChannelHandlerContext ctx, Map<String, String> sipMessage,
-                                      String senderIp, int senderPort) {
+            String senderIp, int senderPort) {
         String deviceId = sipMessage.get("deviceId");
         logger.info("收到设备INVITE 200 OK响应: deviceId={}, from={}:{}", deviceId, senderIp, senderPort);
-        
+
         if (StringUtils.isEmpty(deviceId)) {
             logger.warn("无法从200 OK响应中解析设备ID，跳过ACK发送");
             logger.debug("解析到的sipMessage内容: {}", sipMessage);
@@ -319,7 +319,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
         String to = StringUtils.defaultString(sipMessage.get("To"));
         String deviceLocalIp = StringUtils.defaultString(sipMessage.get("deviceLocalIp"));
         String deviceLocalPort = StringUtils.defaultString(sipMessage.get("deviceLocalPort"));
-        
+
         logger.debug("解析INVITE响应: callId={}, from={}, to={}", callId, from, to);
         logger.debug("设备本地地址: deviceLocalIp={}, deviceLocalPort={}", deviceLocalIp, deviceLocalPort);
 
@@ -328,7 +328,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
                     deviceId, deviceLocalIp, deviceLocalPort, callId,
                     sipServerConfig.getSipIp(), String.valueOf(sipServerConfig.getServerPort()),
                     from, to);
-            
+
             logger.debug("发送ACK确认消息到 {}:{}", senderIp, senderPort);
             sendResponse(ctx, ackMessage, senderIp, senderPort);
 
@@ -345,8 +345,8 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
 
             logger.info("✓ 设备开始推流: deviceId={}, callId={}, ssrc={}", deviceId, callId, ssrc);
         } else {
-            logger.error("✗ 无法发送ACK: 缺少设备本地地址信息, deviceLocalIp={}, deviceLocalPort={}", 
-                deviceLocalIp, deviceLocalPort);
+            logger.error("✗ 无法发送ACK: 缺少设备本地地址信息, deviceLocalIp={}, deviceLocalPort={}",
+                    deviceLocalIp, deviceLocalPort);
             logger.debug("完整的sipMessage内容: {}", sipMessage);
         }
     }
@@ -355,7 +355,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
      * 处理BYE断流请求的200 OK响应
      */
     private void handleByeOkResponse(ChannelHandlerContext ctx, Map<String, String> sipMessage,
-                                   String senderIp, int senderPort) {
+            String senderIp, int senderPort) {
         String deviceId = sipMessage.get("deviceId");
         if (StringUtils.isNotEmpty(deviceId)) {
             logger.info("收到设备BYE响应: {}", deviceId);
@@ -367,7 +367,8 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
 
     /**
      * 从Subject头部提取SSRC
-     * Subject格式: deviceId:010000ssrc,serverId:0
+     * Subject格式: deviceId:ssrc,serverId:0
+     * 兼容不同厂商可能的格式差异，直接提取冒号后的完整SSRC字符串
      */
     private String extractSsrcFromSubject(String subject) {
         if (StringUtils.isEmpty(subject)) {
@@ -375,15 +376,14 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
         }
 
         try {
-            // 解析Subject: deviceId:010000ssrc,serverId:0
+            // 解析Subject: deviceId:ssrc,serverId:0
             String[] parts = subject.split(",");
             if (parts.length > 0) {
-                String devicePart = parts[0];
+                String devicePart = parts[0].trim();
                 int colonIndex = devicePart.indexOf(":");
-                if (colonIndex > 0 && devicePart.length() > colonIndex + 7) {
-                    // 提取010000后面的4位数字作为SSRC
-                    String ssrcPart = devicePart.substring(colonIndex + 7);
-                    return "010000" + ssrcPart;
+                if (colonIndex > 0 && colonIndex < devicePart.length() - 1) {
+                    // 直接取冒号后面的全部内容作为SSRC，不硬编码偏移
+                    return devicePart.substring(colonIndex + 1).trim();
                 }
             }
         } catch (Exception e) {
@@ -396,11 +396,11 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
     /**
      * 注册设备信息
      */
-    private void registerDevice(String deviceId, Map<String, String> sipMessage, 
-                              String senderIp, int senderPort) {
+    private void registerDevice(String deviceId, Map<String, String> sipMessage,
+            String senderIp, int senderPort) {
         // 校验设备ID格式（GB28181标准为20位数字）
-        if (deviceId == null || deviceId.length() > 20) {
-            logger.warn("设备ID格式无效（超过20位或为空），拒绝注册: {}", deviceId);
+        if (!SipUtils.isValidDeviceId(deviceId)) {
+            logger.warn("设备ID格式无效（非20位数字），拒绝注册: {}", deviceId);
             return;
         }
 
@@ -415,10 +415,10 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
         deviceInfo.setOnline(true);
         deviceInfo.setRegisterTime(System.currentTimeMillis());
         deviceInfo.setExpires(sipServerConfig.getRegisterExpires());
-        
+
         // 更新心跳时间，避免注册后立即被标记为超时离线
         deviceInfo.updateHeartbeat();
-        
+
         // 从Contact头部获取设备本地地址
         String contactIp = sipMessage.get("contactIp");
         String contactPort = sipMessage.get("contactPort");
@@ -447,7 +447,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
             DatagramPacket packet = new DatagramPacket(
                     Unpooled.copiedBuffer(response, CharsetUtil.UTF_8), target);
             ctx.writeAndFlush(packet);
-            
+
             logger.debug("发送SIP响应到 {}:{}\n{}", targetIp, targetPort, response.replace("\r\n", "\n"));
         } catch (Exception e) {
             logger.error("发送SIP响应失败: {}", e.getMessage(), e);

@@ -84,6 +84,8 @@ gb28181:
     heartbeat-timeout: ${GB28181_HEARTBEAT_TIMEOUT:60}
     # 设备注册有效期（秒）
     register-expires: ${GB28181_REGISTER_EXPIRES:3600}
+    # SIP协议字符集，默认UTF-8。如果接入的老旧设备中文字段（设备名、厂商等）出现乱码，改为GBK
+    sip-charset: ${GB28181_SIP_CHARSET:UTF-8}
 
 
 # 日志配置

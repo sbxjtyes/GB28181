@@ -11,7 +11,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.DatagramChannel;
 import io.netty.channel.socket.DatagramPacket;
 import io.netty.channel.socket.nio.NioDatagramChannel;
-import io.netty.util.CharsetUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +60,7 @@ public class SipUdpServer {
             group = new NioEventLoopGroup(ioThreads);
             logger.info("Netty EventLoopGroup 初始化，IO线程数: {}", ioThreads);
             Bootstrap bootstrap = new Bootstrap();
-            
+
             bootstrap.group(group)
                     .channel(NioDatagramChannel.class)
                     .option(ChannelOption.SO_BROADCAST, true)
@@ -75,10 +75,10 @@ public class SipUdpServer {
 
             // 绑定端口并启动服务器
             channelFuture = bootstrap.bind(sipServerConfig.getServerIp(), sipServerConfig.getServerPort()).sync();
-            
-            logger.info("SIP UDP服务器启动成功，监听地址: {}:{}", 
+
+            logger.info("SIP UDP服务器启动成功，监听地址: {}:{}",
                     sipServerConfig.getServerIp(), sipServerConfig.getServerPort());
-            
+
         } catch (Exception e) {
             logger.error("SIP UDP服务器启动失败: {}", e.getMessage(), e);
             throw new RuntimeException("SIP UDP服务器启动失败", e);
@@ -133,8 +133,8 @@ public class SipUdpServer {
     /**
      * 发送SIP消息到指定地址
      *
-     * @param message SIP消息内容
-     * @param targetIp 目标IP地址
+     * @param message    SIP消息内容
+     * @param targetIp   目标IP地址
      * @param targetPort 目标端口
      * @return 是否发送成功
      */
@@ -147,18 +147,18 @@ public class SipUdpServer {
 
             InetSocketAddress target = new InetSocketAddress(targetIp, targetPort);
             DatagramPacket packet = new DatagramPacket(
-                    Unpooled.copiedBuffer(message, CharsetUtil.UTF_8), target);
+                    Unpooled.copiedBuffer(message, sipServerConfig.getCharset()), target);
 
             ChannelFuture writeFuture = channelFuture.channel().writeAndFlush(packet);
             boolean completed = writeFuture.await(3000); // 等待最多3秒
-            
+
             if (!completed) {
                 logger.warn("发送SIP消息超时: {}:{}", targetIp, targetPort);
                 return false;
             }
             if (!writeFuture.isSuccess()) {
-                logger.error("发送SIP消息失败: {}:{}, 原因: {}", targetIp, targetPort, 
-                    writeFuture.cause() != null ? writeFuture.cause().getMessage() : "未知");
+                logger.error("发送SIP消息失败: {}:{}, 原因: {}", targetIp, targetPort,
+                        writeFuture.cause() != null ? writeFuture.cause().getMessage() : "未知");
                 return false;
             }
 
