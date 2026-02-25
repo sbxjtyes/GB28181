@@ -61,3 +61,7 @@
   - 新增 docs/api.md API 接口详细文档
   - 新增 docs/architecture.md 架构设计文档
   - 新增 docs/deploy.md 部署指南
+
+### Fixed
+- 修复 CORS 跨域配置仅允许内网 IP，导致公网访问时 UI 无法连接 SIP 服务器的问题
+- 清理误提交的 `SIPServer/target/` 编译产物
