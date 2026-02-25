@@ -12,7 +12,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.socket.DatagramPacket;
-import io.netty.util.CharsetUtil;
+
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -445,7 +445,7 @@ public class SipUdpServerHandler extends SimpleChannelInboundHandler<DatagramPac
         try {
             InetSocketAddress target = new InetSocketAddress(targetIp, targetPort);
             DatagramPacket packet = new DatagramPacket(
-                    Unpooled.copiedBuffer(response, CharsetUtil.UTF_8), target);
+                    Unpooled.copiedBuffer(response, sipServerConfig.getCharset()), target);
             ctx.writeAndFlush(packet);
 
             logger.debug("发送SIP响应到 {}:{}\n{}", targetIp, targetPort, response.replace("\r\n", "\n"));
