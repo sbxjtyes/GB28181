@@ -155,7 +155,7 @@ app:
     # 推流超时时间（秒）
     stream-timeout: 30
     # 默认媒体服务器IP
-    default-server-ip: 192.168.97.12
+    default-server-ip: 127.0.0.1
     # 默认媒体服务器端口
     default-server-port: 30000
     # 是否默认使用TCP推流

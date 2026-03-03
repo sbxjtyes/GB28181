@@ -34,7 +34,7 @@ public class SchemaGenerator {
                     .applySetting("hibernate.connection.driver_class", "com.mysql.cj.jdbc.Driver")
                     .applySetting("hibernate.connection.url", "jdbc:mysql://localhost:3306/gb28181_sip_server")
                     .applySetting("hibernate.connection.username", "root")
-                    .applySetting("hibernate.connection.password", "123456")
+                    .applySetting("hibernate.connection.password", "changeme")
                     .applySetting("hibernate.hbm2ddl.auto", "none")
                     .applySetting("hibernate.show_sql", "true")
                     .applySetting("hibernate.format_sql", "true");

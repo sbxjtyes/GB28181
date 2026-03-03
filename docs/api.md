@@ -288,7 +288,7 @@
 ```json
 {
   "deviceId": "34020000001320000001",
-  "mediaServerIp": "192.168.97.12",
+  "mediaServerIp": "192.168.1.200",
   "mediaServerPort": 30000,
   "useTcp": false
 }
@@ -309,7 +309,7 @@
   "success": true,
   "message": "推流请求发送成功",
   "deviceId": "34020000001320000001",
-  "mediaServerIp": "192.168.97.12",
+  "mediaServerIp": "192.168.1.200",
   "mediaServerPort": 30000,
   "useTcp": false
 }
