@@ -12,7 +12,10 @@
 |------|------|
 | **SIPServer** | Java 后端 SIP 信令服务器，处理设备注册、心跳、INVITE 推流 |
 | **UI** | React Web 管理界面，设备管理与推流控制 |
-| **ZKServer** | ZLMediaKit 流媒体服务器（预编译），接收/转发 RTP 媒体流 |
+| **ZKServer** | ZLMediaKit 流媒体服务器配置（需自行下载二进制文件，详见[部署说明](#4-启动-zkserver流媒体服务器)） |
+
+> ⚠️ **注意**: 本项目的流媒体服务器模块使用了 [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit)（MIT License）。
+> ZLMediaKit 的二进制文件（`MediaServer.exe`、`.dll` 等）**未包含在本仓库中**，请前往其 [Releases 页面](https://github.com/ZLMediaKit/ZLMediaKit/releases) 下载并放置到 `ZKServer/` 目录。
 
 ## 🏗️ 架构概览
 
@@ -54,7 +57,7 @@
 ### ZKServer（流媒体）
 | 技术 | 说明 |
 |------|------|
-| ZLMediaKit | 高性能流媒体服务器 |
+| [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) | 高性能流媒体服务器（第三方开源项目，MIT License） |
 | 支持协议 | RTSP / RTMP / HLS / HTTP-FLV / WebRTC |
 
 ## 📁 目录结构
@@ -93,11 +96,14 @@ GB28181/
 │   │   └── components/         # UI 组件
 │   ├── package.json
 │   └── vite.config.js
-├── ZKServer/                   # ZLMediaKit 流媒体服务器
-│   ├── MediaServer.exe         # 服务器程序
-│   ├── config.ini              # 配置文件
-│   └── www/                    # Web 资源目录
+├── ZKServer/                   # ZLMediaKit 流媒体服务器配置
+│   └── config.ini              # 配置文件（二进制文件需自行下载）
 ├── docs/                       # 项目文档
+│   ├── api.md                  # API 接口详细文档
+│   ├── architecture.md         # 架构设计文档
+│   └── deploy.md               # 部署指南
+├── LICENSE                     # MIT 许可证
+├── CHANGELOG.md                # 版本变更记录
 └── README.md                   # 本文件
 ```
 
@@ -109,6 +115,7 @@ GB28181/
 - **Maven** 3.6+
 - **MySQL** 8.0+
 - **Node.js** 18+（如需运行前端）
+- **ZLMediaKit** 二进制文件（[下载地址](https://github.com/ZLMediaKit/ZLMediaKit/releases)）
 
 ### 1. 初始化数据库
 
@@ -156,6 +163,8 @@ mvn spring-boot:run -Dfile.encoding=UTF-8
 ```
 
 ### 4. 启动 ZKServer（流媒体服务器）
+
+> 📥 首次使用需从 [ZLMediaKit Releases](https://github.com/ZLMediaKit/ZLMediaKit/releases) 下载预编译文件，将 `MediaServer.exe` 及相关 `.dll` 文件放入 `ZKServer/` 目录。
 
 ```bash
 cd ZKServer
@@ -215,6 +224,20 @@ npm run dev
 - [数据库说明](SIPServer/sql/README.md)
 - [版本变更记录](CHANGELOG.md)
 
+## 🙏 致谢
+
+本项目使用了以下开源项目：
+
+| 项目 | 说明 | 许可证 |
+|------|------|--------|
+| [ZLMediaKit](https://github.com/ZLMediaKit/ZLMediaKit) | 高性能流媒体服务器，用于 RTP 接收与协议转换 | MIT |
+| [Spring Boot](https://spring.io/projects/spring-boot) | Java 应用框架 | Apache 2.0 |
+| [Netty](https://netty.io/) | 异步网络通信框架 | Apache 2.0 |
+| [React](https://react.dev/) | 前端 UI 框架 | MIT |
+| [Vite](https://vitejs.dev/) | 前端构建工具 | MIT |
+
 ## 📄 许可证
 
-本项目仅供学习和内部使用。
+本项目基于 [MIT License](LICENSE) 开源。
+
+> **注意**: 本仓库不包含 ZLMediaKit 的二进制文件。ZLMediaKit 是独立的开源项目，拥有自己的 [MIT 许可证](https://github.com/ZLMediaKit/ZLMediaKit/blob/master/LICENSE)。

@@ -96,13 +96,21 @@ start.bat
 
 ### 4.3 ZKServer 部署
 
+> 📥 **本仓库不包含 ZLMediaKit 二进制文件**，需自行下载。
+
 ```bash
-# 1. 编辑配置文件
+# 1. 下载 ZLMediaKit 预编译文件
+#    前往 https://github.com/ZLMediaKit/ZLMediaKit/releases
+#    下载对应平台的预编译包，将以下文件放入 ZKServer/ 目录：
+#    - MediaServer.exe (Windows) 或 MediaServer (Linux)
+#    - jsoncpp.dll / libcrypto-3-x64.dll / libssl-3-x64.dll / srtp2.dll (Windows)
+
+# 2. 编辑配置文件
 # 修改 ZKServer/config.ini 中的关键配置:
 #   [api] secret       → 修改 API 密钥
 #   [rtp_proxy] port_range → RTP 端口范围
 
-# 2. 启动
+# 3. 启动
 cd ZKServer
 MediaServer.exe     # Windows
 ./MediaServer &     # Linux

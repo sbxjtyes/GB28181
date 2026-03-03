@@ -6,8 +6,6 @@ SIPServer/*.jar
 SIPServer/*.war
 SIPServer/*.class
 SIPServer/logs/
-SIPServer/.idea/
-SIPServer/.vscode/
 
 # ===========================
 # Node.js / UI
@@ -22,12 +20,16 @@ UI/*.local
 # ===========================
 ZKServer/log/
 ZKServer/*.log
+ZKServer/*.exe
+ZKServer/*.dll
+ZKServer/www/
 
 # ===========================
 # IDE & Editor
 # ===========================
 .idea/
 .vscode/
+.cursorrules
 *.iml
 *.ipr
 *.iws
@@ -74,3 +76,17 @@ ehthumbs.db
 *.bak
 *.swp
 *~
+
+# ===========================
+# Test / Debug scripts
+# ===========================
+SIPServer/api.py
+SIPServer/api_config.json
+
+# ===========================
+# Media cache files
+# ===========================
+*.ts
+*.m3u8
+!UI/src/**/*.ts
+!UI/src/**/*.tsx

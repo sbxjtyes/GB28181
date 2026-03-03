@@ -7,7 +7,7 @@
 
     <groupId>com.gb28181</groupId>
     <artifactId>gb28181-sip-server</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <packaging>jar</packaging>
 
     <name>GB28181 SIP Server</name>
